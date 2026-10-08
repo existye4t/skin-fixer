@@ -162,12 +162,51 @@ function shouldDrop(path: string, options: FixerOptions) {
   return null;
 }
 
-function repath(path: string, options: FixerOptions, character: string) {
-  if (!options.affix || !options.repathInFile) return path;
-  return path.replace(
-    new RegExp(`assets/characters/${character}/`, "i"),
-    `assets/characters/${character}${options.affix}/`,
-  );
+function prefixFor(character: string, skinNo: number) {
+  return `@${character.slice(0, 4)}${skinNo}_`;
+}
+
+function repathAsset(path: string, prefix: string) {
+  const parts = path.replaceAll("\\", "/").split("/").filter(Boolean);
+  if (!parts.length) return path;
+  const root = parts[0].toLowerCase();
+  if (root !== "assets" && root !== "data") return path;
+  if (parts[1]?.startsWith("@")) return path;
+  const rest = parts.slice(2).join("/");
+  return `${root.toUpperCase()}/${prefix}${parts[1] ?? ""}${rest ? `/${rest}` : ""}`;
+}
+
+function rewriteBin(data: Uint8Array, prefix: string) {
+  const extra = new TextEncoder().encode(prefix).length;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const edits: { at: number; size: number; next: Uint8Array }[] = [];
+  for (let offset = 0; offset + 4 < data.length; offset += 1) {
+    const size = view.getUint16(offset, true);
+    if (size < 12 || size > 240 || offset + 2 + size > data.length) continue;
+    const raw = data.subarray(offset + 2, offset + 2 + size);
+    if (raw[0] !== 0x41 && raw[0] !== 0x61 && raw[0] !== 0x44 && raw[0] !== 0x64) continue;
+    const text = new TextDecoder().decode(raw);
+    if (!/^(assets|data)\//i.test(text) || text.split("/")[1]?.startsWith("@")) continue;
+    const next = new TextEncoder().encode(repathAsset(text, prefix));
+    if (next.length !== size + extra) continue;
+    edits.push({ at: offset, size, next });
+    offset += 1 + size;
+  }
+  if (!edits.length) return data;
+  const out = new Uint8Array(data.length + edits.length * extra);
+  const target = new DataView(out.buffer);
+  let read = 0;
+  let write = 0;
+  for (const edit of edits) {
+    out.set(data.subarray(read, edit.at), write);
+    write += edit.at - read;
+    target.setUint16(write, edit.next.length, true);
+    out.set(edit.next, write + 2);
+    write += 2 + edit.next.length;
+    read = edit.at + 2 + edit.size;
+  }
+  out.set(data.subarray(read), write);
+  return out;
 }
 
 export async function fixSkin(
@@ -214,14 +253,16 @@ export async function fixSkin(
       dropped += 1;
       continue;
     }
-    const nextPath = options.binless ? entry.path : repath(entry.path, options, character);
+    const prefix = prefixFor(character, skinNo);
+    const nextPath = options.binless || !options.repathInFile ? entry.path : repathAsset(entry.path, prefix);
     if (nextPath !== entry.path) repaths += 1;
     const data = await zip.file(entry.path)?.async("uint8array");
     if (!data) {
       missing.push(entry.path);
       continue;
     }
-    const payload = /meta\/info\.json$/i.test(entry.path) ? padInfoVersion(data) : data;
+    let payload = /meta\/info\.json$/i.test(entry.path) ? padInfoVersion(data) : data;
+    if (!options.binless && options.repathInFile && entry.extension === "bin") payload = rewriteBin(payload, prefix);
     files.push({ path: nextPath, data: payload });
     kept += 1;
   }
