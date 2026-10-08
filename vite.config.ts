@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  base: "/skin-fixer/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

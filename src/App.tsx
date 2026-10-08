@@ -42,7 +42,7 @@ export default function App() {
     <ThemeProvider>
       <MotionProvider>
       <I18nProvider>
-        <BrowserRouter>
+        <BrowserRouter basename="/skin-fixer">
           <AnimatedRoutes />
         </BrowserRouter>
       </I18nProvider>
