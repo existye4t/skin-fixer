@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { decode } from "@msgpack/msgpack";
 import JSZip from "jszip";
 
 import { inspectSkin, fixSkin } from "../src/lib/fixer/pipeline.ts";
@@ -51,7 +52,12 @@ if (report.title !== "Midnight Ahri" || report.author !== "atelier" || !fixed.re
 }
 const text = new TextDecoder().decode(out);
 if (!text.includes("Midnight Ahri") || !text.includes("atelier")) throw new Error("metadata overwritten");
-if (report.version !== "1.0.0" || !text.includes("1.0.0")) throw new Error(`version not padded: ${report.version}`);
+if (report.version !== "1.0.0") throw new Error(`version not padded: ${report.version}`);
+const key = Buffer.from("schema_version");
+const at = out.indexOf(key);
+const start = out.lastIndexOf(Buffer.from([0x89]), at);
+const meta = decode(out.subarray(start, start + 197)) as { version: string };
+if (meta.version !== "1.0.0") throw new Error(`msgpack version ${JSON.stringify(meta)}`);
 if (text.includes("Skin Fixer")) throw new Error("fixer name leaked into metadata");
 console.log(`ok ${report.title} by ${report.author} -> ${fixed.result.outputName}`);
 void readFileSync;

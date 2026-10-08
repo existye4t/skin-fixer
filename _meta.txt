@@ -1,0 +1,106 @@
+
+        private byte[] SerializeMetadataMsgpack(ModpkgMetadata metadata)
+        {
+            using var stream = new MemoryStream();
+
+            WriteMsgpackMapHeader(stream, 9);
+
+            WriteMsgpackString(stream, "schema_version");
+            WriteMsgpackUInt(stream, metadata.SchemaVersion);
+
+            WriteMsgpackString(stream, "name");
+            WriteMsgpackString(stream, metadata.Name);
+
+            WriteMsgpackString(stream, "display_name");
+            WriteMsgpackString(stream, metadata.DisplayName);
+
+            WriteMsgpackString(stream, "description");
+            if (metadata.Description == null) WriteMsgpackNil(stream);
+            else WriteMsgpackString(stream, metadata.Description);
+
+            WriteMsgpackString(stream, "version");
+            WriteMsgpackString(stream, string.IsNullOrEmpty(metadata.Version) ? "1.0.0" : metadata.Version);
+
+            WriteMsgpackString(stream, "distributor");
+            if (metadata.Distributor == null)
+            {
+                WriteMsgpackNil(stream);
+            }
+            else
+            {
+                WriteMsgpackMapHeader(stream, 4);
+                WriteMsgpackString(stream, "site_id");
+                WriteMsgpackString(stream, metadata.Distributor.SiteId ?? string.Empty);
+                WriteMsgpackString(stream, "site_name");
+                WriteMsgpackString(stream, metadata.Distributor.SiteName ?? string.Empty);
+                WriteMsgpackString(stream, "site_url");
+                WriteMsgpackString(stream, metadata.Distributor.SiteUrl ?? string.Empty);
+                WriteMsgpackString(stream, "mod_id");
+                WriteMsgpackString(stream, metadata.Distributor.ModId ?? string.Empty);
+            }
+
+            WriteMsgpackString(stream, "authors");
+            var authors = metadata.Authors ?? new List<ModpkgAuthor>();
+            WriteMsgpackArrayHeader(stream, (uint)authors.Count);
+            foreach (var author in authors)
+            {
+                WriteMsgpackMapHeader(stream, 2);
+                WriteMsgpackString(stream, "name");
+                WriteMsgpackString(stream, author.Name ?? string.Empty);
+                WriteMsgpackString(stream, "role");
+                if (string.IsNullOrEmpty(author.Role)) WriteMsgpackNil(stream);
+                else WriteMsgpackString(stream, author.Role);
+            }
+
+            WriteMsgpackString(stream, "license");
+            var license = metadata.License ?? new ModpkgLicense(LicenseType.None);
+            if (license.Type == LicenseType.Spdx)
+            {
+                WriteMsgpackMapHeader(stream, 2);
+                WriteMsgpackString(stream, "type");
+                WriteMsgpackString(stream, "spdx");
+                WriteMsgpackString(stream, "spdx_id");
+                WriteMsgpackString(stream, license.SpdxId ?? string.Empty);
+            }
+            else if (license.Type == LicenseType.Custom)
+            {
+                WriteMsgpackMapHeader(stream, 3);
+                WriteMsgpackString(stream, "type");
+                WriteMsgpackString(stream, "custom");
+                WriteMsgpackString(stream, "name");
+                WriteMsgpackString(stream, license.Name ?? string.Empty);
+                WriteMsgpackString(stream, "url");
+                WriteMsgpackString(stream, license.Url ?? string.Empty);
+            }
+            else
+            {
+                WriteMsgpackMapHeader(stream, 1);
+                WriteMsgpackString(stream, "type");
+                WriteMsgpackString(stream, "none");
+            }
+
+            WriteMsgpackString(stream, "layers");
+            var layers = metadata.Layers ?? new List<ModpkgLayerMetadata>();
+            WriteMsgpackArrayHeader(stream, (uint)layers.Count);
+            foreach (var layer in layers)
+            {
+                WriteMsgpackMapHeader(stream, 3);
+                WriteMsgpackString(stream, "name");
+                WriteMsgpackString(stream, layer.Name ?? string.Empty);
+                WriteMsgpackString(stream, "priority");
+                WriteMsgpackInt(stream, layer.Priority);
+                WriteMsgpackString(stream, "description");
+                if (layer.Description == null) WriteMsgpackNil(stream);
+                else WriteMsgpackString(stream, layer.Description);
+            }
+
+            return stream.ToArray();
+        }
+
+        public void Write()
+        {
+            if (_metadata == null) throw new InvalidOperationException("Metadata not set");
+
+            using var fileStream = File.Create(_outputPath);
+            using var writer = new BinaryWriter(fileStream);
+

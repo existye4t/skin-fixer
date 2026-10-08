@@ -5,7 +5,7 @@ export type Lang = "tr" | "en";
 const copy = {
   tr: {
     brand: "Skin Fixer",
-    source: "cslol-go",
+    source: "GitHub",
     local: "Yerel · yüklenmez",
     heroA: "Skini onar.",
     heroB: "WAD bozulmadan.",
@@ -79,7 +79,7 @@ const copy = {
   },
   en: {
     brand: "Skin Fixer",
-    source: "cslol-go",
+    source: "GitHub",
     local: "Local · never uploaded",
     heroA: "Repair the skin.",
     heroB: "Before the wad breaks.",

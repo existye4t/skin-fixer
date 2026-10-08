@@ -33,6 +33,16 @@ function kindOf(name: string): WadKind {
   return "folder";
 }
 
+function padInfoVersion(data: Uint8Array) {
+  try {
+    const info = JSON.parse(new TextDecoder().decode(data)) as Record<string, unknown>;
+    if (typeof info.Version === "string") info.Version = semver(info.Version);
+    return new TextEncoder().encode(JSON.stringify(info));
+  } catch {
+    return data;
+  }
+}
+
 export function semver(value: string) {
   const parts = value.trim().replace(/^v/i, "").split(".").filter(Boolean);
   while (parts.length < 3) parts.push("0");
@@ -196,7 +206,8 @@ export async function fixSkin(
       missing.push(entry.path);
       continue;
     }
-    files.push({ path: nextPath, data });
+    const payload = /meta\/info\.json$/i.test(entry.path) ? padInfoVersion(data) : data;
+    files.push({ path: nextPath, data: payload });
     kept += 1;
   }
 
