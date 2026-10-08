@@ -58,6 +58,11 @@ const at = out.indexOf(key);
 const start = out.lastIndexOf(Buffer.from([0x89]), at);
 const meta = decode(out.subarray(start, start + 197)) as { version: string };
 if (meta.version !== "1.0.0") throw new Error(`msgpack version ${JSON.stringify(meta)}`);
+const textOut = new TextDecoder().decode(out);
+const lower = textOut.toLowerCase();
+for (const path of ["data/ahri_skin11_concat.bin", "data/ahri_skin11_staticmat.bin", "data/characters/ahri/skins/skin11.bin"]) {
+  if (!lower.includes(path)) throw new Error(`missing ${path}`);
+}
 if (text.includes("Skin Fixer")) throw new Error("fixer name leaked into metadata");
 console.log(`ok ${report.title} by ${report.author} -> ${fixed.result.outputName}`);
 void readFileSync;

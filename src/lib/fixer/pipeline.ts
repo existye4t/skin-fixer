@@ -133,6 +133,21 @@ export async function inspectSkin(file: File): Promise<ImportReport> {
   };
 }
 
+const RELATED: Record<string, string[]> = {
+  zed: ["zedshadow"],
+  annie: ["annietibbers"],
+  shaco: ["shacobox"],
+  ivern: ["ivernminion"],
+  elise: ["elisespiderling"],
+  heimerdinger: ["heimertblue", "heimertyellow"],
+  malzahar: ["malzaharvoidling"],
+  yorick: ["yorickghoulmelee"],
+  zyra: ["zyraseed"],
+  naafiri: ["naafiripackmate"],
+  belveth: ["belvethvoidling"],
+  azir: ["azirsoldier"],
+};
+
 const DROP_STATIC = /staticmaterials?|staticmaterialdef/i;
 const SFX = /sfx_events\.bnk$/i;
 const UI = /(^|\/)ui\.wad(\.client)?$/i;
@@ -211,6 +226,31 @@ export async function fixSkin(
     kept += 1;
   }
 
+  if (!options.binless) {
+    const skins = options.allAvailable && report.skinNumbers.length ? report.skinNumbers : [skinNo];
+    const names = new Set<string>([character, ...(RELATED[character] ?? [])]);
+    for (const entry of report.entries) {
+      const related = entry.path.match(BIN_RE)?.[1];
+      if (related) names.add(related.toLowerCase());
+    }
+    for (const name of names) {
+      for (const skin of skins) {
+        const source = files.find((item) => new RegExp(`${name}_skin${skin}\\.bin$`, "i").test(item.path));
+        if (!source) continue;
+        for (const suffix of ["concat", "StaticMat"]) {
+          const binPath = `data/${name}_skin${skin}_${suffix}.bin`;
+          if (files.some((item) => item.path.toLowerCase() === binPath.toLowerCase())) continue;
+          files.push({ path: binPath, data: source.data });
+          onLog({ tone: "good", text: `[BIN] wrote ${binPath}` });
+        }
+        const skinPath = `data/characters/${name}/skins/skin${skin}.bin`;
+        if (!files.some((item) => item.path.toLowerCase() === skinPath)) {
+          files.push({ path: skinPath, data: source.data });
+          onLog({ tone: "good", text: `[BIN] wrote ${skinPath}` });
+        }
+      }
+    }
+  }
   if (options.smallMod) {
     onLog({ tone: "act", text: "[MOD] small mod — missing base assets were not pulled" });
   }
