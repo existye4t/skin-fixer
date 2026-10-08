@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { inspectSkin, fixSkin } from "../src/lib/fixer/pipeline.ts";
 
 const zip = new JSZip();
-zip.file("META/info.json", JSON.stringify({ Name: "Midnight Ahri", Author: "atelier", Version: "1.4.2", Description: "kept" }));
+zip.file("META/info.json", JSON.stringify({ Name: "Midnight Ahri", Author: "atelier", Version: "1.0", Description: "kept" }));
 zip.file(
   "WAD/ahri.wad.client/data/characters/ahri/skins/skin11/ahri_skin11.bin",
   new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
@@ -51,6 +51,7 @@ if (report.title !== "Midnight Ahri" || report.author !== "atelier" || !fixed.re
 }
 const text = new TextDecoder().decode(out);
 if (!text.includes("Midnight Ahri") || !text.includes("atelier")) throw new Error("metadata overwritten");
+if (report.version !== "1.0.0" || !text.includes("1.0.0")) throw new Error(`version not padded: ${report.version}`);
 if (text.includes("Skin Fixer")) throw new Error("fixer name leaked into metadata");
 console.log(`ok ${report.title} by ${report.author} -> ${fixed.result.outputName}`);
 void readFileSync;

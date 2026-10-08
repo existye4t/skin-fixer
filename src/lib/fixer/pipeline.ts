@@ -33,6 +33,12 @@ function kindOf(name: string): WadKind {
   return "folder";
 }
 
+export function semver(value: string) {
+  const parts = value.trim().replace(/^v/i, "").split(".").filter(Boolean);
+  while (parts.length < 3) parts.push("0");
+  return parts.slice(0, 3).join(".");
+}
+
 function characterFromName(name: string) {
   return name.toLowerCase().match(/^([a-z0-9_]+)\.wad/)?.[1] ?? null;
 }
@@ -91,7 +97,7 @@ export async function inspectSkin(file: File): Promise<ImportReport> {
       if (typeof named === "string") tally(scores, named, 6);
       if (typeof info.Name === "string" && info.Name.trim()) title = info.Name.trim();
       if (typeof info.Author === "string") author = info.Author;
-      if (typeof info.Version === "string" && info.Version.trim()) version = info.Version.trim();
+      if (typeof info.Version === "string" && info.Version.trim()) version = semver(info.Version);
       if (typeof info.Description === "string") description = info.Description;
     } catch {
       /* info.json is optional */
