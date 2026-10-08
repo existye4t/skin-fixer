@@ -45,6 +45,16 @@ function cstr(value: string) {
   return new Uint8Array([...bytes(value), 0]);
 }
 
+function splitWad(path: string, fallback: string) {
+  const normalized = path.replaceAll("\\", "/");
+  const marker = normalized.toLowerCase().indexOf(".wad.client");
+  if (marker === -1) return { wad: fallback, path: normalized.replace(/^wad\//i, "") };
+  return {
+    wad: normalized.slice(normalized.lastIndexOf("/", marker) + 1, marker + ".wad.client".length),
+    path: normalized.slice(marker + ".wad.client/".length),
+  };
+}
+
 function concat(parts: Uint8Array[]) {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let offset = 0;
@@ -70,7 +80,9 @@ export async function buildModpkg(report: ImportReport, wadName: string, files: 
     license: { type: "none" },
     layers: [{ name: "base", priority: 0, description: null }],
   });
-  const paths = ["_meta_/info.msgpack", ...files.map((file) => file.path)];
+  const chunks = files.map((file) => splitWad(file.path, wadName));
+  const wads = [...new Set(chunks.map((chunk) => chunk.wad).filter((name): name is string => Boolean(name)))];
+  const paths = ["_meta_/info.msgpack", ...chunks.map((chunk) => chunk.path)];
   const payloads = [meta, ...files.map((file) => file.data)];
   const layerName = bytes("base");
   const header = concat([
@@ -84,8 +96,8 @@ export async function buildModpkg(report: ImportReport, wadName: string, files: 
     i32(0),
     u32(paths.length),
     ...paths.map(cstr),
-    u32(1),
-    cstr(wadName),
+    u32(wads.length),
+    ...wads.map(cstr),
   ]);
   const pad = (8 - (header.length % 8)) % 8;
   const stored = payloads.map((data, index) => {
@@ -107,7 +119,7 @@ export async function buildModpkg(report: ImportReport, wadName: string, files: 
       u64(xxh64(raw)),
       u32(index),
       u32(index === 0 ? NO_INDEX : 0),
-      u32(index === 0 ? NO_INDEX : 0),
+      u32(index === 0 ? NO_INDEX : wads.indexOf(chunks[index - 1].wad ?? "")),
     ]);
     cursor += item.bytes.length;
     return descriptor;

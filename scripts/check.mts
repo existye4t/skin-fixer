@@ -63,6 +63,9 @@ const lower = textOut.toLowerCase();
 for (const path of ["data/ahri_skin11_concat.bin", "data/ahri_skin11_staticmat.bin", "data/characters/ahri/skins/skin11.bin"]) {
   if (!lower.includes(path)) throw new Error(`missing ${path}`);
 }
+const wadAt = out.indexOf(Buffer.from("ahri.wad.client\0"));
+if (wadAt < 0) throw new Error("wad name missing");
+if (lower.includes("wad/ahri.wad.client/data/ahri_skin11_concat.bin")) throw new Error("concat path still prefixed");
 if (text.includes("Skin Fixer")) throw new Error("fixer name leaked into metadata");
 console.log(`ok ${report.title} by ${report.author} -> ${fixed.result.outputName}`);
 void readFileSync;

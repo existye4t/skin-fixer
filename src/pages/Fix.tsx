@@ -44,6 +44,7 @@ export function Fix() {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState("");
   const [pageKey, setPageKey] = useState(0);
+  const [done, setDone] = useState(false);
 
   function resetPage() {
     setFile(null);
@@ -53,6 +54,7 @@ export function Fix() {
     setResult(null);
     setBlob(null);
     setError("");
+    setDone(false);
     if (inputRef.current) inputRef.current.value = "";
     setPageKey((key) => key + 1);
   }
@@ -86,6 +88,9 @@ export function Fix() {
       );
       setBlob(fixed.blob);
       setResult(fixed.result);
+      setDone(true);
+      chime();
+      window.setTimeout(() => setDone(false), 2400);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t.badFile);
     } finally {
@@ -256,6 +261,41 @@ export function Fix() {
           </aside>
         </div>
       </div>
+      <AnimatePresence>
+        {done && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.18 }}
+            className={cn(
+              "fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur-xl",
+              dark ? "border-white/15 bg-black/75 text-white" : "border-black/10 bg-white/85 text-[#12141a]",
+            )}
+          >
+            {t.done}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+function chime() {
+  const audio = new AudioContext();
+  const now = audio.currentTime;
+  const master = audio.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.05, now + 0.02);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+  master.connect(audio.destination);
+  [523.25, 783.99].forEach((frequency, index) => {
+    const tone = audio.createOscillator();
+    tone.type = "sine";
+    tone.frequency.value = frequency;
+    tone.connect(master);
+    tone.start(now + index * 0.06);
+    tone.stop(now + 0.44);
+  });
+  window.setTimeout(() => void audio.close(), 700);
 }
