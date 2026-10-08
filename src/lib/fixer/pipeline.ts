@@ -176,38 +176,7 @@ function repathAsset(path: string, prefix: string) {
   return `${root.toUpperCase()}/${prefix}${parts[1] ?? ""}${rest ? `/${rest}` : ""}`;
 }
 
-function rewriteBin(data: Uint8Array, prefix: string) {
-  const extra = new TextEncoder().encode(prefix).length;
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const edits: { at: number; size: number; next: Uint8Array }[] = [];
-  for (let offset = 0; offset + 4 < data.length; offset += 1) {
-    const size = view.getUint16(offset, true);
-    if (size < 12 || size > 240 || offset + 2 + size > data.length) continue;
-    const raw = data.subarray(offset + 2, offset + 2 + size);
-    if (raw[0] !== 0x41 && raw[0] !== 0x61 && raw[0] !== 0x44 && raw[0] !== 0x64) continue;
-    const text = new TextDecoder().decode(raw);
-    if (!/^(assets|data)\//i.test(text) || text.split("/")[1]?.startsWith("@")) continue;
-    const next = new TextEncoder().encode(repathAsset(text, prefix));
-    if (next.length !== size + extra) continue;
-    edits.push({ at: offset, size, next });
-    offset += 1 + size;
-  }
-  if (!edits.length) return data;
-  const out = new Uint8Array(data.length + edits.length * extra);
-  const target = new DataView(out.buffer);
-  let read = 0;
-  let write = 0;
-  for (const edit of edits) {
-    out.set(data.subarray(read, edit.at), write);
-    write += edit.at - read;
-    target.setUint16(write, edit.next.length, true);
-    out.set(edit.next, write + 2);
-    write += 2 + edit.next.length;
-    read = edit.at + 2 + edit.size;
-  }
-  out.set(data.subarray(read), write);
-  return out;
-}
+import { retargetBin } from "./bin";
 
 export async function fixSkin(
   file: File,
@@ -262,7 +231,7 @@ export async function fixSkin(
       continue;
     }
     let payload = /meta\/info\.json$/i.test(entry.path) ? padInfoVersion(data) : data;
-    if (!options.binless && options.repathInFile && entry.extension === "bin") payload = rewriteBin(payload, prefix);
+    if (!options.binless && options.repathInFile && entry.extension === "bin") payload = retargetBin(payload, prefix);
     files.push({ path: nextPath, data: payload });
     kept += 1;
   }

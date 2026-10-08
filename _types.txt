@@ -1,0 +1,81 @@
+using System.Globalization;
+using System.Numerics;
+
+namespace Jade.Ritobin;
+
+public static class BinTypeConverter
+{
+    public static BinValue ConvertValue(BinValue source, BinType targetType)
+    {
+        if (source.Type == targetType) return source;
+
+        object nativeVal = GetNativeObject(source);
+
+        return targetType switch
+        {
+            BinType.I8 => new BinI8(ConvertToSByte(nativeVal)),
+            BinType.U8 => new BinU8(ConvertToByte(nativeVal)),
+            BinType.I16 => new BinI16(ConvertToShort(nativeVal)),
+            BinType.U16 => new BinU16(ConvertToUShort(nativeVal)),
+            BinType.I32 => new BinI32(ConvertToInt(nativeVal)),
+            BinType.U32 => new BinU32(ConvertToUInt(nativeVal)),
+            BinType.I64 => new BinI64(ConvertToLong(nativeVal)),
+            BinType.U64 => new BinU64(ConvertToULong(nativeVal)),
+            BinType.F32 => new BinF32(ConvertToFloat(nativeVal)),
+            BinType.Vec2 => new BinVec2(ConvertToVector2(nativeVal)),
+            BinType.Vec3 => new BinVec3(ConvertToVector3(nativeVal)),
+            BinType.Vec4 => new BinVec4(ConvertToVector4(nativeVal)),
+            BinType.Mtx44 => new BinMtx44(ConvertToMatrix4x4(nativeVal)),
+            BinType.Rgba => ConvertToRgba(nativeVal),
+            BinType.String => new BinString(ConvertToPlainString(source)),
+            _ => throw new NotSupportedException($"Conversion from {source.Type} to {targetType} is not supported.")
+        };
+    }
+
+    private static object GetNativeObject(BinValue val) => val switch
+    {
+        BinI8 v => v.Value,
+        BinU8 v => v.Value,
+        BinI16 v => v.Value,
+        BinU16 v => v.Value,
+        BinI32 v => v.Value,
+        BinU32 v => v.Value,
+        BinI64 v => v.Value,
+        BinU64 v => v.Value,
+        BinF32 v => v.Value,
+        BinVec2 v => v.Value,
+        BinVec3 v => v.Value,
+        BinVec4 v => v.Value,
+        BinMtx44 v => v.Value,
+        BinRgba v => v,
+        BinBool v => v.Value ? (sbyte)1 : (sbyte)0,
+        BinString v => v.Value,
+        _ => throw new InvalidCastException($"Cannot extract native value from {val.GetType().Name}")
+    };
+
+    private static sbyte ConvertToSByte(object obj) => obj switch
+    {
+        sbyte v => v,
+        byte v => (sbyte)v,
+        short v => (sbyte)v,
+        ushort v => (sbyte)v,
+        int v => (sbyte)v,
+        uint v => (sbyte)v,
+        long v => (sbyte)v,
+        ulong v => (sbyte)v,
+        float v => (sbyte)v,
+        bool v => v ? (sbyte)1 : (sbyte)0,
+        string s when sbyte.TryParse(s, out var res) => res,
+        _ => 0
+    };
+
+    private static byte ConvertToByte(object obj) => obj switch
+    {
+        sbyte v => (byte)v,
+        byte v => v,
+        short v => (byte)v,
+        ushort v => (byte)v,
+        int v => (byte)v,
+        uint v => (byte)v,
+        long v => (byte)v,
+        ulong v => (byte)v,

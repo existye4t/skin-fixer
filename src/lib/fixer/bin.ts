@@ -1,0 +1,173 @@
+const text = new TextEncoder();
+const read = new TextDecoder();
+
+type Field = { key: number; type: number; value: Value };
+type Value =
+  | { kind: "raw"; type: number; bytes: Uint8Array }
+  | { kind: "string"; value: string }
+  | { kind: "list"; type: number; items: Value[] }
+  | { kind: "embed"; hash: number; fields: Field[] }
+  | { kind: "map"; key: number; value: number; items: [Value, Value][] }
+  | { kind: "option"; type: number; item: Value | null };
+
+class Reader {
+  offset = 0;
+  private readonly data: Uint8Array;
+  constructor(data: Uint8Array) { this.data = data; }
+  get view() {
+    return new DataView(this.data.buffer, this.data.byteOffset, this.data.byteLength);
+  }
+  u8() { return this.data[this.offset++]; }
+  u16() { const value = this.view.getUint16(this.offset, true); this.offset += 2; return value; }
+  u32() { const value = this.view.getUint32(this.offset, true); this.offset += 4; return value; }
+  bytes(count: number) { const out = this.data.slice(this.offset, this.offset + count); this.offset += count; return out; }
+  string() { return read.decode(this.bytes(this.u16())); }
+
+  value(type: number): Value {
+    if (type === 0) return { kind: "raw", type, bytes: new Uint8Array() };
+    if (type === 2) return { kind: "raw", type, bytes: this.bytes(1) };
+    if (type === 16) return { kind: "string", value: this.string() };
+    if (type === 18) return { kind: "embed", hash: this.u32(), fields: this.block() };
+    if (type === 19 || type === 20) {
+      const itemType = this.u8();
+      const size = this.u32();
+      const start = this.offset;
+      const count = this.u32();
+      const items = Array.from({ length: count }, () => this.value(itemType));
+      if (this.offset !== start + size) throw new Error("list size");
+      return { kind: "list", type: itemType, items };
+    }
+    if (type === 21) {
+      const hash = this.u32();
+      return { kind: "embed", hash, fields: hash === 0 ? [] : this.block() };
+    }
+    if (type === 22) return { kind: "raw", type, bytes: this.bytes(4) };
+    if (type === 23) {
+      const itemType = this.u8();
+      const count = this.u8();
+      return { kind: "option", type: itemType, item: count ? this.value(itemType) : null };
+    }
+    if (type === 24) {
+      const key = this.u8();
+      const valueType = this.u8();
+      const size = this.u32();
+      const start = this.offset;
+      const count = this.u32();
+      const items = Array.from({ length: count }, () => [this.value(key), this.value(valueType)] as [Value, Value]);
+      if (this.offset !== start + size) throw new Error("map size");
+      return { kind: "map", key, value: valueType, items };
+    }
+    const widths: Record<number, number> = { 1: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8, 10: 8, 11: 4, 12: 8, 13: 12, 14: 16, 15: 64, 17: 4, 25: 1 };
+    const width = widths[type];
+    if (width === undefined) throw new Error(`bin type ${type}`);
+    return { kind: "raw", type, bytes: this.bytes(width) };
+  }
+
+  block() {
+    const size = this.u32();
+    const start = this.offset;
+    const count = this.u16();
+    const fields = Array.from({ length: count }, () => {
+      const key = this.u32();
+      const type = this.u8();
+      return { key, type, value: this.value(type) };
+    });
+    if (this.offset !== start + size) throw new Error("block size");
+    return fields;
+  }
+}
+
+class Writer {
+  private parts: Uint8Array[] = [];
+  u8(value: number) { this.parts.push(new Uint8Array([value])); }
+  u16(value: number) { const out = new Uint8Array(2); new DataView(out.buffer).setUint16(0, value, true); this.parts.push(out); }
+  u32(value: number) { const out = new Uint8Array(4); new DataView(out.buffer).setUint32(0, value, true); this.parts.push(out); }
+  bytes(value: Uint8Array) { this.parts.push(value); }
+  string(value: string) { const encoded = text.encode(value); this.u16(encoded.length); this.bytes(encoded); }
+  value(node: Value) {
+    if (node.kind === "raw") return this.bytes(node.bytes);
+    if (node.kind === "string") return this.string(node.value);
+    if (node.kind === "list") {
+      this.u8(node.type);
+      this.sized(() => { this.u32(node.items.length); node.items.forEach((item) => this.value(item)); });
+      return;
+    }
+    if (node.kind === "embed") {
+      this.u32(node.hash);
+      if (node.hash === 0 && !node.fields.length) return;
+      this.sized(() => this.fields(node.fields));
+      return;
+    }
+    if (node.kind === "option") {
+      this.u8(node.type);
+      this.u8(node.item ? 1 : 0);
+      if (node.item) this.value(node.item);
+      return;
+    }
+    this.u8(node.key);
+    this.u8(node.value);
+    this.sized(() => { this.u32(node.items.length); node.items.forEach(([key, value]) => { this.value(key); this.value(value); }); });
+  }
+  fields(fields: Field[]) { this.u16(fields.length); fields.forEach((field) => { this.u32(field.key); this.u8(field.type); this.value(field.value); }); }
+  sized(body: () => void) {
+    const marker = this.parts.length;
+    this.u32(0);
+    const before = this.parts.length;
+    body();
+    const inner = concat(this.parts.slice(before));
+    const size = new Uint8Array(4);
+    new DataView(size.buffer).setUint32(0, inner.length, true);
+    this.parts[marker] = size;
+  }
+  finish() { return concat(this.parts); }
+}
+
+function concat(parts: Uint8Array[]) {
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) { out.set(part, offset); offset += part.length; }
+  return out;
+}
+
+function visit(node: Value, prefix: string) {
+  if (node.kind === "string" && /^(assets|data)\//i.test(node.value)) node.value = repath(node.value, prefix);
+  if (node.kind === "list") node.items.forEach((item) => visit(item, prefix));
+  if (node.kind === "embed") node.fields.forEach((field) => visit(field.value, prefix));
+  if (node.kind === "map") node.items.forEach(([key, value]) => { visit(key, prefix); visit(value, prefix); });
+  if (node.kind === "option" && node.item) visit(node.item, prefix);
+}
+
+function repath(path: string, prefix: string) {
+  const parts = path.split("/");
+  if (parts[1]?.startsWith("@")) return path;
+  const rest = parts.slice(2).join("/");
+  return `${parts[0].toUpperCase()}/${prefix}${parts[1] ?? ""}${rest ? `/${rest}` : ""}`;
+}
+
+export function retargetBin(data: Uint8Array, prefix: string) {
+  try {
+    const reader = new Reader(data);
+    const magic = read.decode(reader.bytes(4));
+    const patch = magic === "PTCH";
+    if (patch) { reader.bytes(8); reader.bytes(4); }
+    const version = reader.u32();
+    const linked = version >= 2 ? Array.from({ length: reader.u32() }, () => reader.string()) : [];
+    const count = reader.u32();
+    const names = Array.from({ length: count }, () => reader.u32());
+    const entries = names.map(() => ({ key: reader.u32(), fields: reader.block() }));
+    entries.forEach((entry) => entry.fields.forEach((field) => visit(field.value, prefix)));
+    const writer = new Writer();
+    writer.bytes(text.encode("PROP"));
+    writer.u32(version);
+    if (version >= 2) { writer.u32(linked.length); linked.forEach((item) => writer.string(item)); }
+    writer.u32(entries.length);
+    names.forEach((hash) => writer.u32(hash));
+    entries.forEach((entry) => {
+      writer.u32(entry.key);
+      writer.sized(() => writer.fields(entry.fields));
+    });
+    return writer.finish();
+  } catch {
+    return data;
+  }
+}

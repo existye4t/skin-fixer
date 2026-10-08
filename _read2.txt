@@ -1,0 +1,105 @@
+                    }
+                    if (_offset != startPos + size) throw new Exception("Pointer size mismatch");
+                    return ptr;
+                }
+
+            case BinType.Embed:
+                {
+                    var name = ReadFNV1a();
+                    var size = ReadU32();
+                    var startPos = _offset;
+                    var count = ReadU16();
+                    var embed = new BinEmbed(name);
+                    for (int i = 0; i < count; i++)
+                    {
+                        var fieldName = ReadFNV1a();
+                        var fieldType = (BinType)ReadU8();
+                        embed.Items.Add(new BinField(fieldName, ReadValue(fieldType)));
+                    }
+                    if (_offset != startPos + size) throw new Exception("Embed size mismatch");
+                    return embed;
+                }
+
+            case BinType.Link: return new BinLink(ReadFNV1a());
+
+            case BinType.Option:
+                {
+                    var valueType = (BinType)ReadU8();
+                    var count = ReadU8();
+                    var opt = new BinOption(valueType);
+                    if (count != 0)
+                    {
+                        opt.Items.Add(ReadValue(valueType));
+                    }
+                    return opt;
+                }
+
+            case BinType.Map:
+                {
+                    var keyType = (BinType)ReadU8();
+                    var valueType = (BinType)ReadU8();
+                    var size = ReadU32();
+                    var startPos = _offset;
+                    var count = ReadU32();
+                    var map = new BinMap(keyType, valueType);
+                    for (int i = 0; i < count; i++)
+                    {
+                        var key = ReadValue(keyType);
+                        var val = ReadValue(valueType);
+                        map.Items.Add(new KeyValuePair<BinValue, BinValue>(key, val));
+                    }
+                    if (_offset != startPos + size) throw new Exception("Map size mismatch");
+                    return map;
+                }
+
+            case BinType.Flag: return new BinFlag(ReadBool());
+
+            default: throw new Exception($"Unknown type: {type}");
+        }
+    }
+
+    // Primitive readers
+    private byte[] ReadBytes(int count)
+    {
+        var bytes = new byte[count];
+        Array.Copy(_data, _offset, bytes, 0, count);
+        _offset += count;
+        return bytes;
+    }
+
+    private bool ReadBool() => ReadU8() != 0;
+    private sbyte ReadI8() => (sbyte)ReadU8();
+    private byte ReadU8() => _data[_offset++];
+    private short ReadI16() => BitConverter.ToInt16(ReadBytes(2));
+    private ushort ReadU16() => BitConverter.ToUInt16(ReadBytes(2));
+    private int ReadI32() => BitConverter.ToInt32(ReadBytes(4));
+    private uint ReadU32() => BitConverter.ToUInt32(ReadBytes(4));
+    private long ReadI64() => BitConverter.ToInt64(ReadBytes(8));
+    private ulong ReadU64() => BitConverter.ToUInt64(ReadBytes(8));
+    private float ReadF32() => BitConverter.ToSingle(ReadBytes(4));
+
+    private Vector2 ReadVec2() => new Vector2(ReadF32(), ReadF32());
+    private Vector3 ReadVec3() => new Vector3(ReadF32(), ReadF32(), ReadF32());
+    private Vector4 ReadVec4() => new Vector4(ReadF32(), ReadF32(), ReadF32(), ReadF32());
+
+    private Matrix4x4 ReadMtx44()
+    {
+        return new Matrix4x4(
+            ReadF32(), ReadF32(), ReadF32(), ReadF32(),
+            ReadF32(), ReadF32(), ReadF32(), ReadF32(),
+            ReadF32(), ReadF32(), ReadF32(), ReadF32(),
+            ReadF32(), ReadF32(), ReadF32(), ReadF32()
+        );
+    }
+
+    private string ReadString()
+    {
+        var length = ReadU16();
+        var bytes = ReadBytes(length);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    private FNV1a ReadFNV1a() => new FNV1a(ReadU32());
+    private XXH64 ReadXXH64() => new XXH64(ReadU64());
+}
+

@@ -2,8 +2,30 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { decode } from "@msgpack/msgpack";
 import JSZip from "jszip";
 
+import { retargetBin } from "../src/lib/fixer/bin.ts";
 import { inspectSkin, fixSkin } from "../src/lib/fixer/pipeline.ts";
 
+function binBytes() {
+  const parts: number[] = [];
+  const push = (...values: number[]) => parts.push(...values);
+  const u16 = (value: number) => push(value & 255, value >> 8);
+  const u32 = (value: number) => push(value & 255, (value >> 8) & 255, (value >> 16) & 255, (value >> 24) & 255);
+  push(...new TextEncoder().encode("PROP"));
+  u32(3);
+  u32(0);
+  u32(1);
+  u32(0x12345678);
+  const path = [...new TextEncoder().encode("ASSETS/Characters/Zed/HUD/ZedQ.dds")];
+  const body = [1, 0, 0x22, 0, 0, 0, 16, path.length & 255, path.length >> 8, ...path];
+  u32(0xabcdef);
+  u32(body.length);
+  push(...body);
+  return new Uint8Array(parts);
+}
+const fixedBin = retargetBin(binBytes(), "@Zed0_");
+const decoded = new TextDecoder().decode(fixedBin);
+if (!decoded.includes("ASSETS/@Zed0_Characters/Zed/HUD/ZedQ.dds")) throw new Error("bin path missing");
+if (retargetBin(fixedBin, "@Zed0_") === fixedBin) throw new Error("rewritten bin is not readable");
 const zip = new JSZip();
 zip.file("META/info.json", JSON.stringify({ Name: "Midnight Ahri", Author: "atelier", Version: "1.0", Description: "kept" }));
 zip.file(
