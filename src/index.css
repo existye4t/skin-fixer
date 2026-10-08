@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-paper: #eef1f6;
+  --color-ink: #12141a;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:not(:disabled),
+a,
+[role="switch"],
+label {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+button.glow,
+a.glow,
+.glow {
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+button.glow:hover,
+a.glow:hover,
+.glow:hover {
+  transform: scale(1.045);
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent), 0 8px 30px color-mix(in srgb, currentColor 18%, transparent);
+}
+
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+::selection {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
