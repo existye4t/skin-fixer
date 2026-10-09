@@ -127,7 +127,7 @@ function About() {
     <section ref={ref} className="relative z-10 mx-auto min-h-[80vh] max-w-3xl px-6 py-28">
       <motion.div style={{ opacity, y }}>
         <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.about}</p>
-        <h2 className="mt-3 text-4xl font-light tracking-tight sm:text-5xl">{t.about}</h2>
+        <h2 className="mt-3 text-4xl font-light tracking-tight sm:text-5xl">{t.aboutTitle}</h2>
         <p className={cn("mt-6 text-base font-light leading-relaxed", dark ? "text-neutral-300" : "text-neutral-700")}>{t.aboutHow}</p>
         <p className={cn("mt-4 text-base font-light leading-relaxed", dark ? "text-neutral-300" : "text-neutral-700")}>{t.aboutWho}</p>
         <div className="mt-8">
