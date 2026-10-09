@@ -267,9 +267,19 @@ export function Fix() {
                   </button>
                 </div>
                 <ol className={cn("max-h-64 overflow-auto rounded-2xl border p-4 font-mono text-xs leading-6", dark ? "border-white/10" : "border-black/10")}>
-                  {logs.map((line) => (
-                    <li key={line.id} className={TONES[line.tone]}>{line.text}</li>
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {logs.map((line) => (
+                      <motion.li
+                        key={line.id}
+                        initial={reduced ? false : { opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className={TONES[line.tone]}
+                      >
+                        {line.text}
+                      </motion.li>
+                    ))}
+                  </AnimatePresence>
                 </ol>
               </div>
             )}
