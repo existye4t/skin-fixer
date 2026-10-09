@@ -168,15 +168,16 @@ function prefixFor(character: string, skinNo: number) {
 
 function repathAsset(path: string, prefix: string) {
   const parts = path.replaceAll("\\", "/").split("/").filter(Boolean);
-  if (!parts.length) return path;
+  if (parts.length < 2) return path;
   const root = parts[0].toLowerCase();
   if (root !== "assets" && root !== "data") return path;
-  if (parts[1]?.startsWith("@")) return path;
+  const folder = parts[1];
+  if (!folder.startsWith(".")) return path;
   const rest = parts.slice(2).join("/");
-  return `${root.toUpperCase()}/${prefix}${parts[1] ?? ""}${rest ? `/${rest}` : ""}`;
+  return `${root.toUpperCase()}/${prefix}${folder.slice(1)}${rest ? `/${rest}` : ""}`;
 }
 
-import { retargetBin } from "./bin";
+import { binFailure, retargetBin } from "./bin";
 
 export async function fixSkin(
   file: File,
@@ -231,7 +232,11 @@ export async function fixSkin(
       continue;
     }
     let payload = /meta\/info\.json$/i.test(entry.path) ? padInfoVersion(data) : data;
-    if (!options.binless && options.repathInFile && entry.extension === "bin") payload = retargetBin(payload, prefix);
+    if (!options.binless && options.repathInFile && entry.extension === "bin") {
+      payload = retargetBin(payload, prefix);
+      const failure = binFailure(payload);
+      if (failure) onLog({ tone: "err", text: `[BIN] ${entry.path} was not rewritten: ${failure}` });
+    }
     files.push({ path: nextPath, data: payload });
     kept += 1;
   }
@@ -245,7 +250,7 @@ export async function fixSkin(
     }
     for (const name of names) {
       for (const skin of skins) {
-        const source = files.find((item) => new RegExp(`${name}_skin${skin}\\.bin$`, "i").test(item.path));
+        const source = files.find((item) => new RegExp(`${name}_skin${skin}\\.bin$`, "i").test(item.path) && !/_concat\.bin$/i.test(item.path));
         if (!source) continue;
         for (const suffix of ["concat", "StaticMat"]) {
           const binPath = `data/${name}_skin${skin}_${suffix}.bin`;

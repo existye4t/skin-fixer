@@ -139,9 +139,16 @@ function visit(node: Value, prefix: string) {
 
 function repath(path: string, prefix: string) {
   const parts = path.split("/");
-  if (parts[1]?.startsWith("@")) return path;
+  const folder = parts[1] ?? "";
+  if (parts.length < 2 || !folder.startsWith(".") || folder.includes(prefix)) return path;
   const rest = parts.slice(2).join("/");
-  return `${parts[0].toUpperCase()}/${prefix}${parts[1] ?? ""}${rest ? `/${rest}` : ""}`;
+  return `${parts[0].toUpperCase()}/${prefix}${folder.slice(1)}${rest ? `/${rest}` : ""}`;
+}
+
+const failures = new WeakMap<Uint8Array, string>();
+
+export function binFailure(data: Uint8Array) {
+  return failures.get(data);
 }
 
 export function retargetBin(data: Uint8Array, prefix: string) {
@@ -154,7 +161,11 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     const linked = version >= 2 ? Array.from({ length: reader.u32() }, () => reader.string()) : [];
     const count = reader.u32();
     const names = Array.from({ length: count }, () => reader.u32());
-    const entries = names.map(() => ({ key: reader.u32(), fields: reader.block() }));
+    const entries = names.map(() => {
+      const key = reader.u32();
+      const fields = reader.block();
+      return { key, fields };
+    });
     entries.forEach((entry) => entry.fields.forEach((field) => visit(field.value, prefix)));
     const writer = new Writer();
     writer.bytes(text.encode("PROP"));
@@ -167,7 +178,9 @@ export function retargetBin(data: Uint8Array, prefix: string) {
       writer.sized(() => writer.fields(entry.fields));
     });
     return writer.finish();
-  } catch {
-    return data;
+  } catch (error) {
+    const failed = data.slice();
+    failures.set(failed, error instanceof Error ? error.message : "unreadable bin");
+    return failed;
   }
 }

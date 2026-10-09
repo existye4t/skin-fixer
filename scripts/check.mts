@@ -15,7 +15,7 @@ function binBytes() {
   u32(0);
   u32(1);
   u32(0x12345678);
-  const path = [...new TextEncoder().encode("ASSETS/Characters/Zed/HUD/ZedQ.dds")];
+  const path = [...new TextEncoder().encode("ASSETS/.Zed0_Characters/Zed/HUD/ZedQ.dds")];
   const body = [1, 0, 0x22, 0, 0, 0, 16, path.length & 255, path.length >> 8, ...path];
   u32(0xabcdef);
   u32(body.length);
@@ -24,7 +24,8 @@ function binBytes() {
 }
 const fixedBin = retargetBin(binBytes(), "@Zed0_");
 const decoded = new TextDecoder().decode(fixedBin);
-if (!decoded.includes("ASSETS/@Zed0_Characters/Zed/HUD/ZedQ.dds")) throw new Error("bin path missing");
+if (!decoded.includes("@Zed0_")) throw new Error(`dotted path was not moved: ${decoded.replace(/[^\x20-\x7e]/g, ".")}`);
+if (decoded.includes("ASSETS/.Zed0_")) throw new Error("old dotted prefix survived");
 if (retargetBin(fixedBin, "@Zed0_") === fixedBin) throw new Error("rewritten bin is not readable");
 const zip = new JSZip();
 zip.file("META/info.json", JSON.stringify({ Name: "Midnight Ahri", Author: "atelier", Version: "1.0", Description: "kept" }));

@@ -1,0 +1,201 @@
+                            foreach (var smoll_shit in smollShits)
+                            {
+                                if (smoll_shit.Key.Hash == 0xe44b7382)
+                                {
+                                    if (smoll_shit.Value is BinList f32List && f32List.Items.Count >= 2)
+                                    {
+                                        float d0 = (f32List.Items[0] as BinF32)?.Value ?? -999;
+                                        float d1 = (f32List.Items[1] as BinF32)?.Value ?? -999;
+
+                                        if (d0 == 0 && d1 > 1)
+                                        {
+                                            emitRotation = true;
+                                            // x.UpperLog("EmitRotationAnglesKeyValues detected");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public void Merge_files_into_string_target(List<WadExtractor.Target> results, List<WadExtractor.TargetFile> files)
+        {
+            HashMaster.ResolveTargetFilePathsAsync(files);
+            foreach (var file in files)
+            {
+                if (file.path is not null)
+                {
+                    string s = file.path;
+                    var string_out = s;
+                    if (!Settings.binless)
+                    {
+                        string_out = _pathFixer.FixPath(s);
+
+                    }
+                    var hashes = new List<string> { s };
+
+                    if (s.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+                        hashes.Add(Path.ChangeExtension(s, ".dds"));
+                    if (s.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+                        hashes.Add(Path.ChangeExtension(s, ".tex"));
+                    if (s.EndsWith(".sco", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string_out.Replace(".sco", ".scb");
+                        hashes.Add(Path.ChangeExtension(s, ".scb"));
+                    }
+                    if (s.EndsWith(".scb", StringComparison.OrdinalIgnoreCase))
+                        hashes.Add(Path.ChangeExtension(s, ".sco"));
+
+                    if (s.ToLower() == "assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_2_slow.anm")
+                        hashes.Add("assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_2.anm");
+                    if (s.ToLower() == "assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_1_slow.anm")
+                        hashes.Add("assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_1.anm");
+
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                    WadExtractor.Target found = results.FirstOrDefault(t =>
+                    {
+                        // 1. Check for an exact match first
+                        if (string.Equals(t.OriginalPath, s, StringComparison.OrdinalIgnoreCase))
+                            return true;
+
+                        // 2. Check for interchangeable extensions (.dds <-> .tex)
+                        string ext = Path.GetExtension(s);
+                        if (string.Equals(ext, ".dds", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(ext, ".tex", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string baseName = Path.ChangeExtension(s, null); // Get path without extension
+                            string targetExt = string.Equals(ext, ".dds", StringComparison.OrdinalIgnoreCase) ? ".tex" : ".dds";
+                            string alternativePath = baseName + targetExt;
+
+                            return string.Equals(t.OriginalPath, alternativePath, StringComparison.OrdinalIgnoreCase);
+                        }
+
+                        if (string.Equals(ext, ".sco", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string alternativePath = Path.ChangeExtension(s, "scb");
+
+                            return string.Equals(t.OriginalPath, alternativePath, StringComparison.OrdinalIgnoreCase);
+                        }
+                        return false;
+                    });
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+                    if (found != null)
+                    {
+                        // x.UpperLog($"{found.BinFileRef.Count}");
+                        // x.UpperLog($"{file.BinFileRef.Count}");
+                        // x.UpperLog($"---");
+                        found.BinFileRef.AddRange(file.BinFileRef);
+                    }
+                    else
+                    {
+                        results.Add(new WadExtractor.Target
+                        {
+                            BinFileRef = file.BinFileRef,
+                            OriginalPath = s,
+                            Hashes = hashes,
+                            OutputPath = Settings.outputDir,
+                            OutputString = string_out,
+                        });
+                    }
+                }
+                else
+                {
+                    string s = $"{file.hash:x16}";
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                    WadExtractor.Target found = results.FirstOrDefault(t =>
+                    {
+                        // 1. Check for an exact match first
+                        if (string.Equals(t.OriginalPath, s, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                        return false;
+                    });
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+                    if (found != null)
+                    {
+                        found.BinFileRef.AddRange(file.BinFileRef);
+                    }
+                    else
+                    {
+                        results.Add(new WadExtractor.Target
+                        {
+                            BinFileRef = file.BinFileRef,
+                            OriginalPath = s,
+                            Hashes = [s],
+                            OutputPath = Settings.outputDir,
+                            OutputString = s,
+                        });
+                    }
+                }
+            }
+        }
+        public void FindStringsRecursive(BinValue value, List<WadExtractor.Target> results, List<WadExtractor.TargetFile> files)
+        {
+            if (value is null) return;
+
+            // Recursive Action helper
+            void Recurse(BinValue v) => FindStringsRecursive(v, results, files);
+
+            switch (value)
+            {
+                case BinString str:
+                    string s = str.Value;
+
+                    if (!string.IsNullOrWhiteSpace(s) && s.Contains('.') && s.Contains('/'))
+                    {
+                        var string_out = s;
+                        if (!Settings.binless)
+                        {
+                            string_out = _pathFixer.FixPath(s);
+
+                        }
+                        var hashes = new List<string> { s };
+
+                        if (s.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+                            hashes.Add(Path.ChangeExtension(s, ".dds"));
+                        if (s.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+                            hashes.Add(Path.ChangeExtension(s, ".tex"));
+                        if (s.EndsWith(".sco", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string_out.Replace(".sco", ".scb");
+                            hashes.Add(Path.ChangeExtension(s, ".scb"));
+                        }
+                        if (s.EndsWith(".scb", StringComparison.OrdinalIgnoreCase))
+                            hashes.Add(Path.ChangeExtension(s, ".sco"));
+
+                        if (s.ToLower() == "assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_2_slow.anm")
+                            hashes.Add("assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_2.anm");
+                        if (s.ToLower() == "assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_1_slow.anm")
+                            hashes.Add("assets/characters/taliyah/skins/base/particles/taliyah_base_e_stone_mine_1.anm");
+
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                        WadExtractor.Target found = results.FirstOrDefault(t =>
+                        {
+                            // 1. Check for an exact match first
+                            if (string.Equals(t.OriginalPath, s, StringComparison.OrdinalIgnoreCase))
+                                return true;
+
+                            // 2. Check for interchangeable extensions (.dds <-> .tex)
+                            string ext = Path.GetExtension(s);
+                            if (string.Equals(ext, ".dds", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(ext, ".tex", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string baseName = Path.ChangeExtension(s, null); // Get path without extension
+                                string targetExt = string.Equals(ext, ".dds", StringComparison.OrdinalIgnoreCase) ? ".tex" : ".dds";
+                                string alternativePath = baseName + targetExt;
+
+                                return string.Equals(t.OriginalPath, alternativePath, StringComparison.OrdinalIgnoreCase);
+                            }
+
+                            if (string.Equals(ext, ".sco", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string alternativePath = Path.ChangeExtension(s, "scb");
+
+                                return string.Equals(t.OriginalPath, alternativePath, StringComparison.OrdinalIgnoreCase);
+                            }
+
+                            return false;
+                        });
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.

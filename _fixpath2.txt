@@ -1,0 +1,111 @@
+            static readonly string[] Categories =
+            {
+                "characters", "items", "loadouts", "maps", "particles",
+                "perks", "rewards", "shared", "sounds", "spells", "ux"
+            };
+            private HashSet<string> seen = new HashSet<string>();
+            private HashSet<string> seen_pre = new HashSet<string>();
+            public string FixPath(string finalPath)
+            {
+                string og_path = finalPath;
+                finalPath = FixPath_local(finalPath);
+
+                if (seen.Add(finalPath))
+                {
+                    seen_pre.Add(og_path);
+                    return finalPath;
+                }
+
+                if (!seen_pre.Add(og_path))
+                {
+                    return finalPath;
+                }
+
+
+                string dir = Path.GetDirectoryName(finalPath)!;
+                string name = Path.GetFileNameWithoutExtension(finalPath);
+                string ext = Path.GetExtension(finalPath);
+
+                int i = 1;
+                string candidate;
+
+                do
+                {
+                    candidate = Path.Combine(dir, $"{name}_{i}{ext}");
+                    i++;
+                }
+                while (!seen.Add(candidate));
+
+                return candidate.Replace('\\', '/');
+            }
+
+            public string FixPath_local(string finalPath)
+            {
+                if (_settings.cls_assets)
+                    finalPath = CleanRootPath(finalPath);
+
+                string[] parts = finalPath.Replace("\\", "/").Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+                string firstFolder = parts.Length > 0 ? parts[0].ToLower() : "";
+                string ext = parts.Length > 0
+                    ? Path.GetExtension(parts[^1]).ToLower()
+                    : "";
+
+                string repath = _settings.repath_path_path;
+                bool inFilePath = _settings.in_file_path;
+                if (inFilePath && !repath.EndsWith("_")) repath = $"{repath}_";
+
+                if (firstFolder == "data" || firstFolder == "assets")
+                {
+                    string root = firstFolder == "data" ? "DATA" : "ASSETS";
+
+                    if (inFilePath)
+                    {
+                        string prefix = $"{root}/{repath}{parts.ElementAtOrDefault(1)}";
+                        string rest = parts.Length > 2
+                            ? string.Join("/", parts.Skip(2))
+                            : "";
+
+                        return rest.Length > 0 ? $"{prefix}/{rest}" : prefix;
+                    }
+                    else
+                    {
+                        parts[0] = $"{root}/{repath}";
+                        return string.Join("/", parts);
+                    }
+                }
+
+                bool isFileOnly = parts.Length == 1;
+
+                if (isFileOnly)
+                {
+                    return $"ASSETS/{repath}/{parts[0]}";
+                }
+
+                string prefixRoot = (ext == ".bin" || ext == "")
+                    ? "DATA"
+                    : "ASSETS";
+
+                if (inFilePath)
+                {
+                    return $"{prefixRoot}/{repath}{parts[0]}/" +
+                           string.Join("/", parts.Skip(1));
+                }
+                else
+                {
+                    return $"{prefixRoot}/{repath}/" +
+                           string.Join("/", parts);
+                }
+            }
+
+            static string CleanRootPath(string path)
+            {
+                string[] parts = path.Replace("\\", "/").Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+                int rootIndex = -1;
+                string rootName = "";
+
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    string pLower = parts[i].ToLower();
+                    foreach (string r in Roots)
