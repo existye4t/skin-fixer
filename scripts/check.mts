@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { decode } from "@msgpack/msgpack";
 import JSZip from "jszip";
 
-import { retargetBin } from "../src/lib/fixer/bin.ts";
+import { binFailure, retargetBin } from "../src/lib/fixer/bin.ts";
 import { inspectSkin, fixSkin } from "../src/lib/fixer/pipeline.ts";
 
 function binBytes() {
@@ -16,15 +16,16 @@ function binBytes() {
   u32(1);
   u32(0x12345678);
   const path = [...new TextEncoder().encode("ASSETS/.Zed0_Characters/Zed/HUD/ZedQ.dds")];
-  const body = [1, 0, 0x22, 0, 0, 0, 131, 0x33, 0, 0, 0];
-  const nested = [1, 0, 0x44, 0, 0, 0, 16, path.length & 255, path.length >> 8, ...path];
-  body.push(nested.length & 255, (nested.length >> 8) & 255, (nested.length >> 16) & 255, nested.length >> 24, ...nested);
+  const body = [1, 0, 0x11, 0, 0, 0, 16, path.length & 255, path.length >> 8, ...path];
   u32(0xabcdef);
+  u32(0x11111111);
   u32(body.length);
   push(...body);
   return new Uint8Array(parts);
 }
 const fixedBin = retargetBin(binBytes(), "@Zed0_");
+const failure = binFailure(fixedBin);
+if (failure) throw new Error(failure);
 const decoded = new TextDecoder().decode(fixedBin);
 if (!decoded.includes("@Zed0_")) throw new Error(`dotted path was not moved: ${decoded.replace(/[^\x20-\x7e]/g, ".")}`);
 if (decoded.includes("ASSETS/.Zed0_")) throw new Error("old dotted prefix survived");
