@@ -41,10 +41,20 @@ export function Home() {
         <header className="flex items-center justify-between py-6">
           <span className="text-sm tracking-tight">{t.brand}</span>
           <div className="flex items-center gap-2 sm:gap-3">
-            <SourceLink />
-            <DiscordCard />
-            <SettingsButton />
-            <LanguageSwitch />
+            <div
+              className={cn(
+                "flex items-center overflow-hidden rounded-full border [&>*]:rounded-none [&>*]:border-0",
+                dark ? "border-white/15" : "border-black/10",
+              )}
+            >
+              <SourceLink />
+              <span className={cn("hidden sm:block w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+              <DiscordCard />
+              <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+              <SettingsButton />
+              <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+              <LanguageSwitch />
+            </div>
             <AnimatedThemeToggle />
           </div>
         </header>
