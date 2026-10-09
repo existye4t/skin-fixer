@@ -47,6 +47,7 @@ export function Fix() {
   const [pageKey, setPageKey] = useState(0);
   const [done, setDone] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   function resetPage() {
     setFile(null);
@@ -144,23 +145,33 @@ export function Fix() {
           <motion.section key={pageKey} layout className={cn(panel, "p-6 sm:p-8")}>
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.importKicker}</p>
             <h1 className="mt-2 text-4xl font-light tracking-tight">{t.dropTitle}</h1>
-            <button
+            <motion.button
               type="button"
               onClick={() => inputRef.current?.click()}
               onDragOver={(event) => event.preventDefault()}
+              onDragEnter={(event) => { event.preventDefault(); setDragOver(true); }}
+              onDragLeave={(event) => { event.preventDefault(); setDragOver(false); }}
               onDrop={(event) => {
                 event.preventDefault();
+                setDragOver(false);
                 void onFile(event.dataTransfer.files[0] ?? null);
               }}
+              animate={{
+                scale: dragOver ? 1.012 : 1,
+                opacity: dragOver ? 1 : undefined,
+              }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
               className={cn(
                 "mt-6 flex w-full flex-col items-center rounded-2xl border border-dashed px-6 py-16 transition-colors",
-                dark ? "border-white/15 hover:bg-white/5" : "border-black/15 hover:bg-black/[0.03]",
+                dark
+                  ? dragOver ? "border-white/40 bg-white/5" : "border-white/15 hover:bg-white/5"
+                  : dragOver ? "border-black/25 bg-black/[0.03]" : "border-black/15 hover:bg-black/[0.03]",
               )}
             >
               <FileUp size={20} strokeWidth={1.5} />
               <span className="mt-3 text-sm">{file?.name ?? t.dropIdle}</span>
               <span className="mt-1 text-xs text-neutral-500">{t.dropHint}</span>
-            </button>
+            </motion.button>
             <input ref={inputRef} hidden type="file" accept=".zip,.fantome" onChange={(event) => void onFile(event.target.files?.[0] ?? null)} />
             {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
