@@ -38,9 +38,9 @@ class Reader {
     }
     if (type === 130) {
       const hash = this.u32();
-      return { kind: "embed", hash, fields: hash === 0 ? [] : this.block() };
+      return { kind: "embed", hash, fields: hash === 0 ? [] : this.block().fields };
     }
-    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.block() };
+    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.block().fields };
     if (type === 132) return { kind: "raw", type, bytes: this.bytes(4) };
     if (type === 133) {
       const itemType = this.u8();
