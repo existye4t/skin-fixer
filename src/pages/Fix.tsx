@@ -354,10 +354,25 @@ export function Fix() {
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.18 }}
             className={cn(
-              "fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur-xl",
+              "fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur-xl",
               dark ? "border-white/15 bg-black/75 text-white" : "border-black/10 bg-white/85 text-[#12141a]",
             )}
           >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+              <motion.path
+                d="M2.5 7L5.5 10L11.5 4"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 1 }}
+                transition={reduced
+                  ? { duration: 0 }
+                  : { pathLength: { duration: 0.35, delay: 0.05, ease: "easeOut" }, opacity: { duration: 0.1 } }
+                }
+              />
+            </svg>
             {t.done}
           </motion.div>
         )}
