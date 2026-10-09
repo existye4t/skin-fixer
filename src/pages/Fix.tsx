@@ -11,6 +11,7 @@ import { OptionRow, Segmented } from "@/components/OptionRow";
 import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
 import { Button } from "@/components/ui/button";
 import { MagneticWrapper } from "@/components/ui/magnetic-button";
+import { SpotlightPanel } from "@/components/ui/spotlight";
 import TopoField from "@/components/ui/topo-field";
 import { fixSkin, inspectSkin } from "@/lib/fixer/pipeline";
 import { DEFAULT_OPTIONS, type FixerOptions, type FixReport, type ImportReport, type LogLine } from "@/lib/fixer/types";
@@ -153,7 +154,8 @@ export function Fix() {
         </header>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <motion.section key={pageKey} layout className={cn(panel, "p-6 sm:p-8")}>
+          <SpotlightPanel dark={dark} className={cn(panel, "overflow-hidden")}>
+          <motion.section key={pageKey} layout className="p-6 sm:p-8">
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.importKicker}</p>
             <h1 className="mt-2 text-4xl font-light tracking-tight">{t.dropTitle}</h1>
             <motion.button
@@ -253,8 +255,10 @@ export function Fix() {
               </p>
             )}
           </motion.section>
+          </SpotlightPanel>
 
-          <aside className={cn(panel, "p-5")}>
+          <aside className={cn(panel, "overflow-hidden")}>
+          <SpotlightPanel dark={dark} className="p-5">
             <div className="flex items-center justify-between">
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.pass}</p>
               <button
@@ -306,6 +310,7 @@ export function Fix() {
                 onChange={(animation) => setOptions({ ...options, animation })}
               />
             </div>
+          </SpotlightPanel>
           </aside>
         </div>
       </div>
