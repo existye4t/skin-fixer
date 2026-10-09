@@ -67,9 +67,9 @@ class Reader {
   }
 
   block() {
-    const key = this.u32();
     const size = this.u32();
     const start = this.offset;
+    const key = this.u32();
     const count = this.u16();
     const fields = Array.from({ length: count }, () => {
       const key = this.u32();
@@ -174,10 +174,8 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     writer.u32(entries.length);
     names.forEach((hash) => writer.u32(hash));
     entries.forEach((entry) => {
-      writer.sized(() => {
-        writer.u32(entry.key);
-        writer.fields(entry.fields);
-      });
+      writer.u32(entry.key);
+      writer.sized(() => writer.fields(entry.fields));
     });
     return writer.finish();
   } catch (error) {
