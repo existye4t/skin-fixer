@@ -38,9 +38,9 @@ class Reader {
     }
     if (type === 130) {
       const hash = this.u32();
-      return { kind: "embed", hash, fields: hash === 0 ? [] : this.block() };
+      return { kind: "embed", hash, fields: hash === 0 ? [] : this.block().fields };
     }
-    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.block() };
+    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.block().fields };
     if (type === 132) return { kind: "raw", type, bytes: this.bytes(4) };
     if (type === 133) {
       const itemType = this.u8();
@@ -67,8 +67,9 @@ class Reader {
   }
 
   block() {
+    const key = this.u32();
     const size = this.u32();
-    const start = this.offset;
+    const start = this.offset - 4;
     const count = this.u16();
     const fields = Array.from({ length: count }, () => {
       const key = this.u32();
@@ -76,7 +77,7 @@ class Reader {
       return { key, type, value: this.value(type) };
     });
     if (this.offset !== start + size) throw new Error("block size");
-    return fields;
+    return { key, fields };
   }
 }
 
@@ -164,7 +165,7 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     const linked = version >= 2 ? Array.from({ length: reader.u32() }, () => reader.string()) : [];
     const count = reader.u32();
     const names = Array.from({ length: count }, () => reader.u32());
-    const entries = names.map(() => ({ key: reader.u32(), fields: reader.block() }));
+    const entries = names.map(() => reader.block());
     entries.forEach((entry) => entry.fields.forEach((field) => visit(field.value, prefix)));
     const writer = new Writer();
     writer.bytes(text.encode("PROP"));
@@ -173,8 +174,10 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     writer.u32(entries.length);
     names.forEach((hash) => writer.u32(hash));
     entries.forEach((entry) => {
-      writer.u32(entry.key);
-      writer.sized(() => writer.fields(entry.fields));
+      writer.sized(() => {
+        writer.u32(entry.key);
+        writer.fields(entry.fields);
+      });
     });
     return writer.finish();
   } catch (error) {
