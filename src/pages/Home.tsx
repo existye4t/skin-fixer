@@ -12,6 +12,7 @@ import TopoField from "@/components/ui/topo-field";
 import { Button } from "@/components/ui/button";
 import { MagneticWrapper } from "@/components/ui/magnetic-button";
 import { useI18n } from "@/lib/i18n";
+import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const ease = [0.22, 1, 0.36, 1] as const;
 export function Home() {
   const { theme } = useTheme();
   const { t } = useI18n();
+  const { reduced } = useMotionSetting();
   const dark = theme === "dark";
   const steps = [
     ["01", t.step1t, t.step1b],
@@ -74,14 +76,42 @@ export function Home() {
             {t.local}
           </motion.p>
           <motion.h1
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.32, delay: 0.03, ease }}
+            initial="hidden"
+            animate="visible"
+            variants={reduced ? {} : {
+              hidden: {},
+              visible: { transition: { staggerChildren: 0.04, delayChildren: 0.03 } },
+            }}
             className="max-w-4xl text-5xl font-light tracking-tight sm:text-7xl"
           >
-            {t.heroA}
+            {t.heroA.split(" ").map((word, i) => (
+              <motion.span
+                key={`a-${i}`}
+                variants={reduced ? {} : {
+                  hidden: { opacity: 0, y: 12, filter: "blur(6px)" },
+                  visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.36, ease } },
+                }}
+                style={reduced ? {} : undefined}
+                className="inline-block mr-[0.25em]"
+              >
+                {word}
+              </motion.span>
+            ))}
             <br />
-            <span className={dark ? "text-neutral-500" : "text-neutral-400"}>{t.heroB}</span>
+            <span className={dark ? "text-neutral-500" : "text-neutral-400"}>
+              {t.heroB.split(" ").map((word, i) => (
+                <motion.span
+                  key={`b-${i}`}
+                  variants={reduced ? {} : {
+                    hidden: { opacity: 0, y: 12, filter: "blur(6px)" },
+                    visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.36, ease } },
+                  }}
+                  className="inline-block mr-[0.25em]"
+                >
+                  {word}
+                </motion.span>
+              ))}
+            </span>
           </motion.h1>
           <motion.p
             initial={{ opacity: 0 }}
