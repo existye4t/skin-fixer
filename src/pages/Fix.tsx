@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Download, FileUp } from "lucide-react";
+import { ArrowLeft, CheckCircle, Download, FileUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { DiscordCard } from "@/components/DiscordCard";
@@ -197,7 +197,29 @@ export function Fix() {
                   : dragOver ? "border-black/25 bg-black/[0.03]" : "border-black/15 hover:bg-black/[0.03]",
               )}
             >
-              <FileUp size={20} strokeWidth={1.5} />
+              <AnimatePresence mode="popLayout" initial={false}>
+                {file ? (
+                  <motion.span
+                    key="check"
+                    initial={reduced ? false : { opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduced ? {} : { opacity: 0, scale: 0.7 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <CheckCircle size={20} strokeWidth={1.5} />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="upload"
+                    initial={reduced ? false : { opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduced ? {} : { opacity: 0, scale: 0.7 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <FileUp size={20} strokeWidth={1.5} />
+                  </motion.span>
+                )}
+              </AnimatePresence>
               <span className="mt-3 text-sm">{file?.name ?? t.dropIdle}</span>
               <span className="mt-1 text-xs text-neutral-500">{t.dropHint}</span>
             </motion.button>
