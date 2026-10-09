@@ -9,6 +9,7 @@ import { SettingsButton } from "@/components/SettingsButton";
 import { SourceLink } from "@/components/SourceLink";
 import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
 import TopoField from "@/components/ui/topo-field";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -80,16 +81,17 @@ export function Home() {
             {t.lead}
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.24, ease }}>
-            <Link
-              to="/fix"
-              className={cn(
-                "glow group mt-10 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm",
-                dark ? "bg-white text-black hover:bg-neutral-200" : "bg-[#12141a] text-[#eef1f6] hover:bg-black",
-              )}
+            <Button
+              asChild
+              variant={dark ? "default" : "paper"}
+              size="pill"
+              className="glow group mt-10 gap-2"
             >
-              {t.cta}
-              <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
-            </Link>
+              <Link to="/fix">
+                {t.cta}
+                <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+              </Link>
+            </Button>
           </motion.div>
         </main>
 

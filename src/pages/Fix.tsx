@@ -9,6 +9,7 @@ import { SettingsButton } from "@/components/SettingsButton";
 import { SourceLink } from "@/components/SourceLink";
 import { OptionRow, Segmented } from "@/components/OptionRow";
 import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
+import { Button } from "@/components/ui/button";
 import TopoField from "@/components/ui/topo-field";
 import { fixSkin, inspectSkin } from "@/lib/fixer/pipeline";
 import { DEFAULT_OPTIONS, type FixerOptions, type FixReport, type ImportReport, type LogLine } from "@/lib/fixer/types";
@@ -177,23 +178,24 @@ export function Fix() {
             </AnimatePresence>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
+              <Button
+                variant={dark ? "default" : "paper"}
+                size="pill-sm"
                 disabled={!report || busy}
                 onClick={() => void run()}
-                className={cn("glow rounded-full px-5 py-2.5 text-sm disabled:opacity-40", dark ? "bg-white text-black" : "bg-[#12141a] text-white")}
+                className="glow"
               >
                 {busy ? t.fixing : t.fix}
-              </button>
+              </Button>
               {blob && (
-                <button type="button" onClick={download} className="glow inline-flex items-center gap-2 rounded-full border border-current/15 px-5 py-2.5 text-sm">
+                <Button variant="currentOutline" size="pill-sm" onClick={download} className="glow gap-2">
                   <Download size={15} /> {t.download}
-                </button>
+                </Button>
               )}
               {(file || result) && (
-                <button type="button" onClick={resetPage} className="rounded-full px-5 py-2.5 text-sm text-neutral-500 hover:text-current">
+                <Button variant="subtle" size="pill-sm" onClick={resetPage}>
                   {t.resetPage}
-                </button>
+                </Button>
               )}
             </div>
             {logs.length > 0 && (

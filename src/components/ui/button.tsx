@@ -15,12 +15,17 @@ const buttonVariants = cva(
         paper: "bg-[#12141a] text-[#eef1f6] hover:bg-[#1c2028]",
         paperOutline:
           "border border-black/15 bg-transparent text-[#12141a] hover:bg-black/5",
+        currentOutline:
+          "border border-current/15 bg-transparent hover:bg-current/5",
+        subtle: "bg-transparent text-neutral-500 hover:text-current",
       },
       size: {
         default: "h-10 px-4 py-2",
         sm: "h-9 px-3",
         lg: "h-12 px-6",
         icon: "h-10 w-10",
+        pill: "px-6 py-3",
+        "pill-sm": "px-5 py-2.5",
       },
     },
     defaultVariants: {
