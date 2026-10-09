@@ -249,7 +249,8 @@ export function Fix() {
               <span className="text-neutral-500">{t.affix}</span>
               <input className={cn(field, "mt-1.5")} value={options.affix} placeholder={t.affixHint} onChange={(event) => setOptions({ ...options, affix: event.target.value })} />
             </label>
-            <div className={cn("mt-3 divide-y", dark ? "divide-white/10" : "divide-black/8")}>
+            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsContent}</p>
+            <div className={cn("mt-2 divide-y", dark ? "divide-white/10" : "divide-black/8")}>
               {(
                 [
                   ["allAvailable", t.allAvailable],
@@ -266,18 +267,21 @@ export function Fix() {
                 <OptionRow key={key} label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={(checked) => setOptions({ ...options, [key]: checked })} />
               ))}
             </div>
-            <Segmented
-              label={t.sound}
-              value={options.sound}
-              options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
-              onChange={(sound) => setOptions({ ...options, sound })}
-            />
-            <Segmented
-              label={t.animation}
-              value={options.animation}
-              options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
-              onChange={(animation) => setOptions({ ...options, animation })}
-            />
+            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsAudio}</p>
+            <div className="mt-2">
+              <Segmented
+                label={t.sound}
+                value={options.sound}
+                options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
+                onChange={(sound) => setOptions({ ...options, sound })}
+              />
+              <Segmented
+                label={t.animation}
+                value={options.animation}
+                options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
+                onChange={(animation) => setOptions({ ...options, animation })}
+              />
+            </div>
           </aside>
         </div>
       </div>
