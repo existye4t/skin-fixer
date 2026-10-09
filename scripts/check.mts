@@ -17,9 +17,9 @@ function binBytes() {
   u32(0x12345678);
   const path = [...new TextEncoder().encode("ASSETS/.Zed0_Characters/Zed/HUD/ZedQ.dds")];
   const body = [1, 0, 0x11, 0, 0, 0, 16, path.length & 255, path.length >> 8, ...path];
-  u32(0xabcdef);
+  u32(body.length + 4);
   u32(0x11111111);
-  u32(body.length);
+  u32(0xabcdef);
   push(...body);
   return new Uint8Array(parts);
 }

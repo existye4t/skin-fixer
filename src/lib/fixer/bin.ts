@@ -67,8 +67,8 @@ class Reader {
   }
 
   block() {
-    const key = this.u32();
     const size = this.u32();
+    const key = this.u32();
     const start = this.offset;
     const count = this.u16();
     const fields = Array.from({ length: count }, () => {
@@ -146,7 +146,7 @@ function repath(path: string, prefix: string) {
   const folder = parts[1] ?? "";
   if (parts.length < 2 || !folder.startsWith(".") || folder.includes(prefix)) return path;
   const rest = parts.slice(2).join("/");
-  return `${parts[0].toUpperCase()}/${prefix}${folder.slice(1)}${rest ? `/${rest}` : ""}`;
+  return `${parts[0].toUpperCase()}/${prefix}${folder.slice(1).toLowerCase()}${rest ? `/${rest}` : ""}`;
 }
 
 const failures = new WeakMap<Uint8Array, string>();

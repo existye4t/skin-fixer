@@ -45,6 +45,7 @@ export function Fix() {
   const [error, setError] = useState("");
   const [pageKey, setPageKey] = useState(0);
   const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   function resetPage() {
     setFile(null);
@@ -196,11 +197,28 @@ export function Fix() {
               )}
             </div>
             {logs.length > 0 && (
-              <ol className={cn("mt-6 max-h-64 overflow-auto rounded-2xl border p-4 font-mono text-xs leading-6", dark ? "border-white/10" : "border-black/10")}>
-                {logs.map((line) => (
-                  <li key={line.id} className={TONES[line.tone]}>{line.text}</li>
-                ))}
-              </ol>
+              <div className="mt-6">
+                <div className="mb-2 flex items-center justify-between text-xs">
+                  <span className="text-red-500">{logs.filter((line) => line.tone === "err").length} {t.logErrors}</span>
+                  <button
+                    type="button"
+                    className="text-neutral-500 hover:text-current"
+                    onClick={() => {
+                      const codes = [...new Set(logs.flatMap((line) => line.text.match(/bin type \d+/g) ?? []))];
+                      void navigator.clipboard.writeText(`${logs.map((line) => line.text).join("\n")}${codes.length ? `\n\n${codes.join(", ")}` : ""}`);
+                      setCopied(true);
+                      window.setTimeout(() => setCopied(false), 1200);
+                    }}
+                  >
+                    {copied ? t.copied : t.copyLog}
+                  </button>
+                </div>
+                <ol className={cn("max-h-64 overflow-auto rounded-2xl border p-4 font-mono text-xs leading-6", dark ? "border-white/10" : "border-black/10")}>
+                  {logs.map((line) => (
+                    <li key={line.id} className={TONES[line.tone]}>{line.text}</li>
+                  ))}
+                </ol>
+              </div>
             )}
             {result && (
               <p className="mt-4 text-sm text-neutral-500">

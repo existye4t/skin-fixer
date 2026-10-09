@@ -174,7 +174,7 @@ function repathAsset(path: string, prefix: string) {
   const folder = parts[1];
   if (!folder.startsWith(".")) return path;
   const rest = parts.slice(2).join("/");
-  return `${root.toUpperCase()}/${prefix}${folder.slice(1)}${rest ? `/${rest}` : ""}`;
+  return `${root.toUpperCase()}/${prefix}${folder.slice(1).toLowerCase()}${rest ? `/${rest}` : ""}`;
 }
 
 import { binFailure, retargetBin } from "./bin";
