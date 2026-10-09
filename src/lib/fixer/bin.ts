@@ -58,8 +58,8 @@ class Reader {
       return { kind: "map", key, value: valueType, items };
     }
     const widths: Record<number, number> = {
-      1: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8, 10: 8, 11: 4,
-      12: 8, 13: 12, 14: 16, 15: 64, 17: 4, 135: 8, 146: 4,
+      1: 1, 2: 1, 3: 1, 4: 2, 5: 2, 6: 4, 7: 4, 8: 8, 9: 8, 10: 4,
+      11: 8, 12: 12, 13: 16, 14: 64, 15: 4, 17: 4, 18: 8, 132: 4, 135: 1,
     };
     const width = widths[type];
     if (width === undefined) throw new Error(`bin type ${type}`);
