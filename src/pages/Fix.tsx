@@ -10,6 +10,7 @@ import { SourceLink } from "@/components/SourceLink";
 import { OptionRow, Segmented } from "@/components/OptionRow";
 import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
 import { Button } from "@/components/ui/button";
+import { MagneticWrapper } from "@/components/ui/magnetic-button";
 import TopoField from "@/components/ui/topo-field";
 import { fixSkin, inspectSkin } from "@/lib/fixer/pipeline";
 import { DEFAULT_OPTIONS, type FixerOptions, type FixReport, type ImportReport, type LogLine } from "@/lib/fixer/types";
@@ -199,15 +200,17 @@ export function Fix() {
             </AnimatePresence>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button
-                variant={dark ? "default" : "paper"}
-                size="pill-sm"
-                disabled={!report || busy}
-                onClick={() => void run()}
-                className="glow"
-              >
-                {busy ? t.fixing : t.fix}
-              </Button>
+              <MagneticWrapper>
+                <Button
+                  variant={dark ? "default" : "paper"}
+                  size="pill-sm"
+                  disabled={!report || busy}
+                  onClick={() => void run()}
+                  className="glow"
+                >
+                  {busy ? t.fixing : t.fix}
+                </Button>
+              </MagneticWrapper>
               {blob && (
                 <Button variant="currentOutline" size="pill-sm" onClick={download} className="glow gap-2">
                   <Download size={15} /> {t.download}
