@@ -275,11 +275,9 @@ export async function fixSkin(
   }
 
   const outputName = file.name.replace(/\.(zip|wad|client)$/i, ".modpkg").replace(/\.fantome$/i, ".modpkg");
-  const hashLines = report.entries.map((entry) => `${entry.hash.toString(16).padStart(8, "0")} ${entry.path}`);
-  const hashPath = files.some((item) => /meta\/hashes\/game\.hashes\.txt$/i.test(item.path))
-    ? "META/hashes/game.harvested.txt"
-    : "META/hashes/game.hashes.txt";
-  files.push({ path: hashPath, data: new TextEncoder().encode(hashLines.join("\n")) });
+  const index = [...new Set(files.map((item) => item.path).filter((path) => !path.toUpperCase().startsWith("META/")))];
+  files.push({ path: "META/hashes.game.txt", data: new TextEncoder().encode(`${index.join("\n")}\n`) });
+  onLog({ tone: "good", text: `[HASH] indexed ${index.length} game file(s)` });
   onLog({ tone: "good", text: `[OUT] ${outputName} · ${report.title} · ${kept} kept · ${dropped} dropped` });
   const blob = await buildModpkg(report, `${character}.wad.client`, files);
   return {
