@@ -16,7 +16,9 @@ function binBytes() {
   u32(1);
   u32(0x12345678);
   const path = [...new TextEncoder().encode("ASSETS/.Zed0_Characters/Zed/HUD/ZedQ.dds")];
-  const body = [1, 0, 0x22, 0, 0, 0, 16, path.length & 255, path.length >> 8, ...path];
+  const body = [1, 0, 0x22, 0, 0, 0, 131, 0x33, 0, 0, 0];
+  const nested = [1, 0, 0x44, 0, 0, 0, 16, path.length & 255, path.length >> 8, ...path];
+  body.push(nested.length & 255, (nested.length >> 8) & 255, (nested.length >> 16) & 255, nested.length >> 24, ...nested);
   u32(0xabcdef);
   u32(body.length);
   push(...body);

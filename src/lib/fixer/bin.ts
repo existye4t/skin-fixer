@@ -27,8 +27,7 @@ class Reader {
     if (type === 0) return { kind: "raw", type, bytes: new Uint8Array() };
     if (type === 2) return { kind: "raw", type, bytes: this.bytes(1) };
     if (type === 16) return { kind: "string", value: this.string() };
-    if (type === 18) return { kind: "embed", hash: this.u32(), fields: this.block() };
-    if (type === 19 || type === 20) {
+    if (type === 128 || type === 129) {
       const itemType = this.u8();
       const size = this.u32();
       const start = this.offset;
@@ -37,17 +36,18 @@ class Reader {
       if (this.offset !== start + size) throw new Error("list size");
       return { kind: "list", type: itemType, items };
     }
-    if (type === 21) {
+    if (type === 130) {
       const hash = this.u32();
       return { kind: "embed", hash, fields: hash === 0 ? [] : this.block() };
     }
-    if (type === 22) return { kind: "raw", type, bytes: this.bytes(4) };
-    if (type === 23) {
+    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.block() };
+    if (type === 132) return { kind: "raw", type, bytes: this.bytes(4) };
+    if (type === 133) {
       const itemType = this.u8();
       const count = this.u8();
       return { kind: "option", type: itemType, item: count ? this.value(itemType) : null };
     }
-    if (type === 24) {
+    if (type === 134) {
       const key = this.u8();
       const valueType = this.u8();
       const size = this.u32();
@@ -57,7 +57,10 @@ class Reader {
       if (this.offset !== start + size) throw new Error("map size");
       return { kind: "map", key, value: valueType, items };
     }
-    const widths: Record<number, number> = { 1: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8, 10: 8, 11: 4, 12: 8, 13: 12, 14: 16, 15: 64, 17: 4, 25: 1 };
+    const widths: Record<number, number> = {
+      1: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8, 10: 8, 11: 4,
+      12: 8, 13: 12, 14: 16, 15: 64, 17: 4, 135: 8, 146: 4,
+    };
     const width = widths[type];
     if (width === undefined) throw new Error(`bin type ${type}`);
     return { kind: "raw", type, bytes: this.bytes(width) };
