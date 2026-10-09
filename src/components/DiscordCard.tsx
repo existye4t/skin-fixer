@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useI18n } from "@/lib/i18n";
+import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -115,6 +116,7 @@ function useDiscord() {
 export function DiscordCard() {
   const { t } = useI18n();
   const dark = useTheme().theme === "dark";
+  const { reduced } = useMotionSetting();
   const [open, setOpen] = useState(false);
   const profile = useDiscord();
   const { status, statusLabel, name, handle, avatar, game, spotify } = profile;
@@ -143,10 +145,13 @@ export function DiscordCard() {
             <button type="button" className="absolute inset-0 bg-black/50" aria-label={t.close} onClick={() => setOpen(false)} />
             <motion.article
               role="dialog"
-              initial={{ y: 16, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 12, opacity: 0 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ y: 16, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 10, opacity: 0, scale: 0.97 }}
+              transition={reduced
+                ? { duration: 0 }
+                : { type: "spring", stiffness: 300, damping: 28, opacity: { duration: 0.15 } }
+              }
               className={cn(
                 "relative w-full max-w-sm overflow-hidden rounded-3xl border p-5 shadow-2xl",
                 dark ? "border-white/10 bg-[#0b0b0b] text-white" : "border-black/10 bg-[#f7f8fb] text-[#12141a]",

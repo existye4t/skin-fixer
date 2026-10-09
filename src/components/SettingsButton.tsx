@@ -32,10 +32,13 @@ export function SettingsButton() {
             <button type="button" className="absolute inset-0 bg-black/50" aria-label={t.close} onClick={() => setOpen(false)} />
             <motion.div
               role="dialog"
-              initial={{ y: 12, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 8, opacity: 0 }}
-              transition={{ duration: reduced ? 0.01 : 0.16 }}
+              initial={{ y: 16, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 10, opacity: 0, scale: 0.97 }}
+              transition={reduced
+                ? { duration: 0 }
+                : { type: "spring", stiffness: 300, damping: 28, opacity: { duration: 0.15 } }
+              }
               className={cn("relative w-full max-w-sm rounded-3xl border p-5", dark ? "border-white/10 bg-[#0b0b0b] text-white" : "border-black/10 bg-[#f7f8fb]")}
             >
               <h2 className="text-lg font-light">{t.settings}</h2>
