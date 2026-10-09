@@ -16,8 +16,23 @@ import TopoField from "@/components/ui/topo-field";
 import { fixSkin, inspectSkin } from "@/lib/fixer/pipeline";
 import { DEFAULT_OPTIONS, type FixerOptions, type FixReport, type ImportReport, type LogLine } from "@/lib/fixer/types";
 import { useI18n } from "@/lib/i18n";
+import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.04 } },
+};
+const EASE = [0.22, 1, 0.36, 1] as [number, number, number, number];
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: EASE } },
+};
+const staggerItemFast = {
+  hidden: { opacity: 0, y: 6 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.18, ease: EASE } },
+};
 
 const TONES = {
   act: "text-sky-500",
@@ -36,6 +51,7 @@ function formatBytes(bytes: number) {
 export function Fix() {
   const { theme } = useTheme();
   const { t } = useI18n();
+  const { reduced } = useMotionSetting();
   const dark = theme === "dark";
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -190,12 +206,21 @@ export function Fix() {
 
             <AnimatePresence>
               {report && (
-                <motion.dl initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <motion.dl
+                  initial="hidden"
+                  animate="visible"
+                  variants={reduced ? {} : staggerContainer}
+                  className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3"
+                >
                   {facts.map(([label, value]) => (
-                    <div key={label} className={cn("rounded-2xl border px-3 py-3", dark ? "border-white/10" : "border-black/10")}>
+                    <motion.div
+                      key={label}
+                      variants={reduced ? {} : staggerItem}
+                      className={cn("rounded-2xl border px-3 py-3", dark ? "border-white/10" : "border-black/10")}
+                    >
                       <dt className="text-[11px] uppercase tracking-[0.14em] text-neutral-500">{label}</dt>
                       <dd className="mt-1 truncate font-light">{value}</dd>
-                    </div>
+                    </motion.div>
                   ))}
                 </motion.dl>
               )}
@@ -278,7 +303,12 @@ export function Fix() {
               <input className={cn(field, "mt-1.5")} value={options.affix} placeholder={t.affixHint} onChange={(event) => setOptions({ ...options, affix: event.target.value })} />
             </label>
             <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsContent}</p>
-            <div className={cn("mt-2 divide-y", dark ? "divide-white/10" : "divide-black/8")}>
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={reduced ? {} : { ...staggerContainer, visible: { transition: { staggerChildren: 0.03 } } }}
+              className={cn("mt-2 divide-y", dark ? "divide-white/10" : "divide-black/8")}
+            >
               {(
                 [
                   ["allAvailable", t.allAvailable],
@@ -292,9 +322,11 @@ export function Fix() {
                   ["repathInFile", t.repathInFile],
                 ] as const
               ).map(([key, label]) => (
-                <OptionRow key={key} label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={(checked) => setOptions({ ...options, [key]: checked })} />
+                <motion.div key={key} variants={reduced ? {} : staggerItemFast}>
+                  <OptionRow label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={(checked) => setOptions({ ...options, [key]: checked })} />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
             <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsAudio}</p>
             <div className="mt-2">
               <Segmented
