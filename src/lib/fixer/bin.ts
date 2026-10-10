@@ -191,27 +191,64 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     const reader = new Reader(data);
     const magic = read.decode(reader.bytes(4));
     const patch = magic === "PTCH";
-    if (patch) { reader.bytes(8); reader.bytes(4); }
+    if (patch) { reader.bytes(8); reader.bytes(4); } // skip PTCH unk(8) + "PROP"(4)
     const version = reader.u32();
     const linked = version >= 2 ? Array.from({ length: reader.u32() }, () => reader.string()) : [];
     const count = reader.u32();
     const names = Array.from({ length: count }, () => reader.u32());
     const entries = names.map(() => reader.block());
     entries.forEach((entry) => entry.fields.forEach((field) => visit(field.value, prefix)));
+
+    // Read patches section (PTCH files, version >= 3)
+    // patches are also visited for string repathing
+    type PatchEntry = { hash: number; pathType: number; path: string; value: Value };
+    const patches: PatchEntry[] = [];
+    if (patch && version >= 3) {
+      const patchCount = reader.u32();
+      for (let i = 0; i < patchCount; i++) {
+        const hash = reader.u32();
+        const size = reader.u32();
+        const start = reader.offset;
+        const pathType = reader.u8();
+        const path = reader.string();
+        const value = reader.value(pathType);
+        if (reader.offset !== start + size) throw new Error("patch size mismatch");
+        visit(value, prefix);
+        patches.push({ hash, pathType, path, value });
+      }
+    }
+
     const writer = new Writer();
+    // Write PTCH header if original was PTCH
+    if (patch) {
+      writer.bytes(text.encode("PTCH"));
+      writer.u32(1);
+      writer.u32(0);
+    }
     writer.bytes(text.encode("PROP"));
     writer.u32(version);
     if (version >= 2) { writer.u32(linked.length); linked.forEach((item) => writer.string(item)); }
     writer.u32(entries.length);
     names.forEach((hash) => writer.u32(hash));
     // Write each entry: size(4) → [key(4) + fields]
-    // size covers key+fields, matching block() reader
     entries.forEach((entry) => {
       writer.sized(() => {
         writer.u32(entry.key);
         writer.fields(entry.fields);
       });
     });
+    // Write patches section back (PTCH, version >= 3)
+    if (patch && version >= 3) {
+      writer.u32(patches.length);
+      patches.forEach(({ hash, pathType, path, value }) => {
+        writer.u32(hash);
+        writer.sized(() => {
+          writer.u8(pathType);
+          writer.string(path);
+          writer.value(value);
+        });
+      });
+    }
     return writer.finish();
   } catch (error) {
     const failed = data.slice();
