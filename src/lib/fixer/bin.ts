@@ -38,9 +38,9 @@ class Reader {
     }
     if (type === 130) {
       const hash = this.u32();
-      return { kind: "embed", hash, fields: hash === 0 ? [] : this.block().fields };
+      return { kind: "embed", hash, fields: hash === 0 ? [] : this.embedBlock() };
     }
-    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.block().fields };
+    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.embedBlock() };
     if (type === 132) return { kind: "raw", type, bytes: this.bytes(4) };
     if (type === 133) {
       const itemType = this.u8();
@@ -66,18 +66,34 @@ class Reader {
     return { kind: "raw", type, bytes: this.bytes(width) };
   }
 
+  // Top-level block: key(4) → size(4) → count(2) → fields
+  // size covers everything after size itself (count + fields), NOT the key
   block() {
+    const key = this.u32();
     const size = this.u32();
     const start = this.offset;
-    const key = this.u32();
+    const count = this.u16();
+    const fields = Array.from({ length: count }, () => {
+      const fkey = this.u32();
+      const type = this.u8();
+      return { key: fkey, type, value: this.value(type) };
+    });
+    if (this.offset !== start + size) throw new Error("block size");
+    return { key, fields };
+  }
+
+  // Embedded block (types 130/131): size(4) → count(2) → fields — no key
+  embedBlock() {
+    const size = this.u32();
+    const start = this.offset;
     const count = this.u16();
     const fields = Array.from({ length: count }, () => {
       const key = this.u32();
       const type = this.u8();
       return { key, type, value: this.value(type) };
     });
-    if (this.offset !== start + size) throw new Error("block size");
-    return { key, fields };
+    if (this.offset !== start + size) throw new Error("embed size");
+    return fields;
   }
 }
 
