@@ -203,7 +203,7 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     // patches are also visited for string repathing
     type PatchEntry = { hash: number; pathType: number; path: string; value: Value };
     const patches: PatchEntry[] = [];
-    if (patch && version >= 3) {
+    if (patch) {
       const patchCount = reader.u32();
       for (let i = 0; i < patchCount; i++) {
         const hash = reader.u32();
