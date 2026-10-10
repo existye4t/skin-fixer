@@ -10,7 +10,6 @@ import { SourceLink } from "@/components/SourceLink";
 import { OptionRow, Segmented } from "@/components/OptionRow";
 import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
 import { Button } from "@/components/ui/button";
-import { MagneticWrapper } from "@/components/ui/magnetic-button";
 import { SpotlightPanel } from "@/components/ui/spotlight";
 import TopoField from "@/components/ui/topo-field";
 import { fixSkin, inspectSkin } from "@/lib/fixer/pipeline";
@@ -258,7 +257,7 @@ export function Fix() {
             </AnimatePresence>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <MagneticWrapper>
+              <motion.div whileTap={reduced ? {} : { scale: 0.96 }}>
                 <Button
                   variant={dark ? "default" : "paper"}
                   size="pill-sm"
@@ -268,7 +267,7 @@ export function Fix() {
                 >
                   {busy ? t.fixing : t.fix}
                 </Button>
-              </MagneticWrapper>
+              </motion.div>
               {blob && (
                 <Button variant="currentOutline" size="pill-sm" onClick={download} className="glow gap-2">
                   <Download size={15} /> {t.download}
