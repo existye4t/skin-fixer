@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, type ReactNode, type CSSProperties } from "react";
+import { useRef, useState, useCallback, useEffect, type ReactNode, type CSSProperties } from "react";
 
 import { useMotionSetting } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -16,15 +16,25 @@ interface SpotlightPanelProps {
 export function SpotlightPanel({ children, className, dark, radius = 220, style }: SpotlightPanelProps) {
   const { reduced } = useMotionSetting();
   const ref = useRef<HTMLDivElement>(null);
+  const rafId = useRef<number>(0);
   const [pos, setPos] = useState({ x: "50%", y: "50%" });
   const [visible, setVisible] = useState(false);
 
+  // Cancel any pending RAF when the component unmounts
+  useEffect(() => () => cancelAnimationFrame(rafId.current), []);
+
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (reduced || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    setPos({
-      x: `${e.clientX - rect.left}px`,
-      y: `${e.clientY - rect.top}px`,
+    // Capture event coordinates before the synthetic event is recycled
+    const { clientX, clientY } = e;
+    cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      setPos({
+        x: `${clientX - rect.left}px`,
+        y: `${clientY - rect.top}px`,
+      });
     });
   }, [reduced]);
 

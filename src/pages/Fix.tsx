@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, CheckCircle, Download, FileUp } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -134,16 +134,20 @@ export function Fix() {
 
   const panel = cn("rounded-3xl border backdrop-blur-xl", dark ? "border-white/10 bg-black/55" : "border-black/10 bg-white/75");
   const field = cn("w-full rounded-xl border bg-transparent px-3 py-2 text-sm outline-none", dark ? "border-white/15" : "border-black/10");
-  const facts = report
-    ? [
-        [t.champion, report.character ?? t.unknown],
-        [t.kind, report.kind],
-        [t.entries, String(report.entries.length)],
-        [t.size, formatBytes(report.bytes)],
-        [t.bins, String(report.bins.length)],
-        [t.skins, report.skinNumbers.join(", ") || "—"],
-      ]
-    : [];
+  const facts = useMemo(
+    () =>
+      report
+        ? [
+            [t.champion, report.character ?? t.unknown],
+            [t.kind, report.kind],
+            [t.entries, String(report.entries.length)],
+            [t.size, formatBytes(report.bytes)],
+            [t.bins, String(report.bins.length)],
+            [t.skins, report.skinNumbers.join(", ") || "—"],
+          ]
+        : [],
+    [report, t],
+  );
 
   return (
     <div className={cn("relative", dark ? "text-white" : "text-[#12141a]")}>

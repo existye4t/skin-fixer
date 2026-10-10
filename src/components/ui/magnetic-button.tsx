@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useCallback, type ReactNode } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 
 import { useMotionSetting } from "@/lib/motion";
@@ -20,22 +20,23 @@ export function MagneticWrapper({ children, strength = 7, className }: MagneticW
   const x = useSpring(rawX, SPRING);
   const y = useSpring(rawY, SPRING);
 
-  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+  // MotionValue.set() bypasses React renders — no RAF throttle needed here.
+  // useCallback avoids allocating new function objects on every render.
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (reduced || !ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const dx = e.clientX - cx;
     const dy = e.clientY - cy;
-    // normalise to ±1 within element bounds, then scale by strength
     rawX.set((dx / (rect.width / 2)) * strength);
     rawY.set((dy / (rect.height / 2)) * strength);
-  }
+  }, [reduced, rawX, rawY, strength]);
 
-  function handleMouseLeave() {
+  const handleMouseLeave = useCallback(() => {
     rawX.set(0);
     rawY.set(0);
-  }
+  }, [rawX, rawY]);
 
   return (
     <motion.div
