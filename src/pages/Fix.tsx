@@ -103,6 +103,9 @@ export function Fix() {
     setResult(null);
     setBlob(null);
     setLogs([]);
+    // Yield to the browser so React can paint "busy" state before the heavy
+    // JSZip.loadAsync decompress blocks the main thread for large files.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     try {
       const fixed = await fixSkin(file, report, options, (line) =>
         setLogs((current) => [...current, { ...line, id: current.length + 1 }]),
