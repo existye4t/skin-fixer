@@ -1,6 +1,7 @@
 
+import { useRef } from "react";
 import { ArrowRight } from "lucide-react";
-import { motion, useScroll, useSpring, useTransform } from "framer-motion";
+import { motion, useMotionValue, useScroll, useSpring, useTransform } from "framer-motion";
 import { Link } from "react-router-dom";
 
 import { DiscordCard, DiscordProfile } from "@/components/DiscordCard";
@@ -156,19 +157,16 @@ export function Home() {
 
         <section className="grid gap-3 pb-16 sm:grid-cols-3">
           {steps.map(([index, title, body], order) => (
-            <motion.article
+            <StepCard
               key={index}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.26, delay: 0.1 + order * 0.04, ease }}
-              className={cn("overflow-hidden border backdrop-blur-md", dark ? "border-white/10 bg-black/40" : "border-black/10 bg-white/55")}
-            >
-              <SpotlightPanel dark={dark} className="p-6 text-left" radius={180}>
-                <p className="font-mono text-[11px] text-neutral-500">{index}</p>
-                <h2 className="mt-3 text-lg font-light">{title}</h2>
-                <p className={cn("mt-2 text-sm leading-relaxed", dark ? "text-neutral-400" : "text-neutral-600")}>{body}</p>
-              </SpotlightPanel>
-            </motion.article>
+              index={index as string}
+              title={title as string}
+              body={body as string}
+              order={order}
+              dark={dark}
+              reduced={reduced}
+              ease={ease}
+            />
           ))}
         </section>
       </div>
@@ -177,6 +175,99 @@ export function Home() {
     </div>
   );
 }
+
+// ─── StepCard ────────────────────────────────────────────────────────────────
+
+const TILT_SPRING = { stiffness: 150, damping: 15 };
+
+interface StepCardProps {
+  index: string;
+  title: string;
+  body: string;
+  order: number;
+  dark: boolean;
+  reduced: boolean;
+  ease: readonly [number, number, number, number];
+}
+
+function StepCard({ index, title, body, order, dark, reduced, ease }: StepCardProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const rawRX = useMotionValue(0);
+  const rawRY = useMotionValue(0);
+  const rotateX = useSpring(rawRX, TILT_SPRING);
+  const rotateY = useSpring(rawRY, TILT_SPRING);
+  const liftY = useSpring(useMotionValue(0), { stiffness: 200, damping: 20 });
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (reduced || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = (e.clientX - cx) / (rect.width / 2);
+    const dy = (e.clientY - cy) / (rect.height / 2);
+    rawRY.set(dx * 4);
+    rawRX.set(-dy * 4);
+  }
+
+  function handleMouseEnter() {
+    if (!reduced) liftY.set(-3);
+  }
+
+  function handleMouseLeave() {
+    rawRX.set(0);
+    rawRY.set(0);
+    liftY.set(0);
+  }
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.26, delay: 0.1 + order * 0.04, ease }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={reduced ? {} : { rotateX, rotateY, y: liftY, transformPerspective: 1000 }}
+      className="group"
+    >
+      <SpotlightPanel
+        dark={dark}
+        radius={200}
+        className={cn(
+          "overflow-hidden border backdrop-blur-md transition-colors duration-200",
+          dark
+            ? "border-white/10 bg-black/40 hover:border-white/25 hover:bg-black/55"
+            : "border-black/10 bg-white/55 hover:border-black/20 hover:bg-white/75",
+        )}
+      >
+        <div className="p-6 text-left">
+          {/* Number kicker — animates to full opacity + scale on hover */}
+          <p
+            className={cn(
+              "font-mono text-[11px] text-neutral-500 transition-all duration-200 origin-left",
+              "group-hover:text-current group-hover:scale-x-[1.08]",
+              dark ? "group-hover:text-white" : "group-hover:text-[#12141a]",
+            )}
+          >
+            {index}
+          </p>
+          <h2 className="mt-3 text-lg font-light">{title}</h2>
+          {/* Underline reveal: scaleX 0→1 on hover */}
+          <div
+            className={cn(
+              "h-px origin-left scale-x-0 transition-transform duration-[250ms] group-hover:scale-x-100",
+              dark ? "bg-white/20" : "bg-black/15",
+            )}
+          />
+          <p className={cn("mt-2 text-sm leading-relaxed", dark ? "text-neutral-400" : "text-neutral-600")}>{body}</p>
+        </div>
+      </SpotlightPanel>
+    </motion.div>
+  );
+}
+
+// ─── About ───────────────────────────────────────────────────────────────────
 
 const aboutEase = [0.22, 1, 0.36, 1] as const;
 
