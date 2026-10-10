@@ -157,13 +157,15 @@ export function Fix() {
                 dark ? "border-white/15" : "border-black/10",
               )}
             >
-              <SourceLink />
-              <span className={cn("hidden sm:block w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
-              <DiscordCard />
-              <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
-              <SettingsButton />
-              <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
-              <LanguageSwitch />
+              <SpotlightPanel dark={dark} radius={80} className="flex items-center">
+                <SourceLink />
+                <span className={cn("hidden sm:block w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <DiscordCard />
+                <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <SettingsButton />
+                <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <LanguageSwitch />
+              </SpotlightPanel>
             </div>
             <AnimatedThemeToggle />
           </div>

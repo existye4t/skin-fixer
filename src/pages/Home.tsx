@@ -11,6 +11,7 @@ import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
 import TopoField from "@/components/ui/topo-field";
 import { Button } from "@/components/ui/button";
 import { MagneticWrapper } from "@/components/ui/magnetic-button";
+import { SpotlightPanel } from "@/components/ui/spotlight";
 import { useI18n } from "@/lib/i18n";
 import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
@@ -50,13 +51,15 @@ export function Home() {
                 dark ? "border-white/15" : "border-black/10",
               )}
             >
-              <SourceLink />
-              <span className={cn("hidden sm:block w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
-              <DiscordCard />
-              <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
-              <SettingsButton />
-              <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
-              <LanguageSwitch />
+              <SpotlightPanel dark={dark} radius={80} className="flex items-center">
+                <SourceLink />
+                <span className={cn("hidden sm:block w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <DiscordCard />
+                <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <SettingsButton />
+                <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <LanguageSwitch />
+              </SpotlightPanel>
             </div>
             <AnimatedThemeToggle />
           </div>
@@ -145,11 +148,13 @@ export function Home() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.26, delay: 0.1 + order * 0.04, ease }}
-              className={cn("border p-6 text-left backdrop-blur-md", dark ? "border-white/10 bg-black/40" : "border-black/10 bg-white/55")}
+              className={cn("overflow-hidden border backdrop-blur-md", dark ? "border-white/10 bg-black/40" : "border-black/10 bg-white/55")}
             >
-              <p className="font-mono text-[11px] text-neutral-500">{index}</p>
-              <h2 className="mt-3 text-lg font-light">{title}</h2>
-              <p className={cn("mt-2 text-sm leading-relaxed", dark ? "text-neutral-400" : "text-neutral-600")}>{body}</p>
+              <SpotlightPanel dark={dark} className="p-6 text-left" radius={180}>
+                <p className="font-mono text-[11px] text-neutral-500">{index}</p>
+                <h2 className="mt-3 text-lg font-light">{title}</h2>
+                <p className={cn("mt-2 text-sm leading-relaxed", dark ? "text-neutral-400" : "text-neutral-600")}>{body}</p>
+              </SpotlightPanel>
             </motion.article>
           ))}
         </section>

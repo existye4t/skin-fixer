@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useI18n } from "@/lib/i18n";
 import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
+import { SpotlightPanel } from "@/components/ui/spotlight";
 import { cn } from "@/lib/utils";
 
 const ID = "772232490445176842";
@@ -153,10 +154,11 @@ export function DiscordCard() {
                 : { type: "spring", stiffness: 300, damping: 28, opacity: { duration: 0.15 } }
               }
               className={cn(
-                "relative w-full max-w-sm overflow-hidden rounded-3xl border p-5 shadow-2xl",
+                "relative w-full max-w-sm overflow-hidden rounded-3xl border shadow-2xl",
                 dark ? "border-white/10 bg-[#0b0b0b] text-white" : "border-black/10 bg-[#f7f8fb] text-[#12141a]",
               )}
             >
+              <SpotlightPanel dark={dark} className="p-5" radius={200}>
               <div className="flex items-center gap-3">
                 <span className="relative">
                   {avatar ? (
@@ -192,6 +194,7 @@ export function DiscordCard() {
               <button type="button" onClick={() => setOpen(false)} className="mt-5 text-sm text-neutral-500 hover:text-current">
                 {t.close}
               </button>
+              </SpotlightPanel>
             </motion.article>
           </motion.div>
         )}

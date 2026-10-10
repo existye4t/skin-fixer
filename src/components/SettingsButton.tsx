@@ -5,6 +5,7 @@ import { Settings } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
+import { SpotlightPanel } from "@/components/ui/spotlight";
 import { cn } from "@/lib/utils";
 
 export function SettingsButton() {
@@ -30,7 +31,7 @@ export function SettingsButton() {
         {open && (
           <motion.div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <button type="button" className="absolute inset-0 bg-black/50" aria-label={t.close} onClick={() => setOpen(false)} />
-            <motion.div
+<motion.div
               role="dialog"
               initial={{ y: 16, opacity: 0, scale: 0.97 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -39,14 +40,16 @@ export function SettingsButton() {
                 ? { duration: 0 }
                 : { type: "spring", stiffness: 300, damping: 28, opacity: { duration: 0.15 } }
               }
-              className={cn("relative w-full max-w-sm rounded-3xl border p-5", dark ? "border-white/10 bg-[#0b0b0b] text-white" : "border-black/10 bg-[#f7f8fb]")}
+              className={cn("relative w-full max-w-sm overflow-hidden rounded-3xl border", dark ? "border-white/10 bg-[#0b0b0b] text-white" : "border-black/10 bg-[#f7f8fb]")}
             >
-              <h2 className="text-lg font-light">{t.settings}</h2>
-              <button type="button" onClick={() => setReduced(!reduced)} className="mt-4 flex w-full items-center justify-between text-sm">
-                <span>{t.reduceMotion}</span>
-                <span className={cn("text-xs", dark ? "text-neutral-400" : "text-neutral-500")}>{reduced ? t.on : t.off}</span>
-              </button>
-              <button type="button" onClick={() => setOpen(false)} className="mt-5 text-sm text-neutral-500">{t.close}</button>
+              <SpotlightPanel dark={dark} className="p-5" radius={200}>
+                <h2 className="text-lg font-light">{t.settings}</h2>
+                <button type="button" onClick={() => setReduced(!reduced)} className="mt-4 flex w-full items-center justify-between text-sm">
+                  {t.reduceMotion}
+                  <span className={cn("text-xs", dark ? "text-neutral-400" : "text-neutral-500")}>{reduced ? t.on : t.off}</span>
+                </button>
+                <button type="button" onClick={() => setOpen(false)} className="mt-5 text-sm text-neutral-500">{t.close}</button>
+              </SpotlightPanel>
             </motion.div>
           </motion.div>
         )}
