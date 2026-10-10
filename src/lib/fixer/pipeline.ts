@@ -167,14 +167,28 @@ function prefixFor(character: string, skinNo: number) {
 }
 
 function repathAsset(path: string, prefix: string) {
+  // prefix = "@Zed0_"  →  prefixNoAt = "Zed0_"
+  // Handles paths with or without a WAD prefix:
+  //   "WAD/Zed.wad.client/ASSETS/.Zed0_Characters/..." → same with "@Zed0_characters"
+  //   "ASSETS/.Zed0_Characters/..."                    → "ASSETS/@Zed0_characters/..."
+  // Same rule as repath() in bin.ts — mirrors cslol-go behaviour.
   const parts = path.replaceAll("\\", "/").split("/").filter(Boolean);
   if (parts.length < 2) return path;
-  const root = parts[0].toLowerCase();
-  if (root !== "assets" && root !== "data") return path;
-  const folder = parts[1];
+
+  // Find the ASSETS or DATA segment (may be after WAD/xxx.wad.client/)
+  const assetIdx = parts.findIndex((p) => /^(assets|data)$/i.test(p));
+  if (assetIdx === -1 || assetIdx + 1 >= parts.length) return path;
+
+  const folder = parts[assetIdx + 1];
   if (!folder.startsWith(".")) return path;
-  const rest = parts.slice(2).join("/");
-  return `${root.toUpperCase()}/${prefix}${folder.slice(1).toLowerCase()}${rest ? `/${rest}` : ""}`;
+
+  const prefixNoAt = prefix.slice(1); // "Zed0_"
+  if (!folder.toLowerCase().startsWith("." + prefixNoAt.toLowerCase())) return path;
+
+  const suffix = folder.slice(1 + prefixNoAt.length).toLowerCase();
+  const rest = parts.slice(assetIdx + 2).join("/");
+  const newAssetPart = `${parts[assetIdx].toUpperCase()}/@${prefixNoAt}${suffix}${rest ? `/${rest}` : ""}`;
+  return [...parts.slice(0, assetIdx), newAssetPart].join("/");
 }
 
 import { binFailure, retargetBin } from "./bin";

@@ -166,11 +166,18 @@ function visit(node: Value, prefix: string) {
 }
 
 function repath(path: string, prefix: string) {
+  // prefix = "@Zed0_"  →  prefixNoAt = "Zed0_"
+  // Convert ".Zed0_Characters/..." → "@Zed0_characters/..."
+  // Rule: strip leading ".", keep the prefix portion's casing, lowercase the suffix.
+  // cslol-go does the same: replaces "." with "@" and lowercases only the part after the underscore.
   const parts = path.split("/");
   const folder = parts[1] ?? "";
-  if (parts.length < 2 || !folder.startsWith(".") || folder.includes(prefix)) return path;
+  if (parts.length < 2 || !folder.startsWith(".")) return path;
+  const prefixNoAt = prefix.slice(1); // "Zed0_"
+  if (!folder.toLowerCase().startsWith("." + prefixNoAt.toLowerCase())) return path;
+  const suffix = folder.slice(1 + prefixNoAt.length).toLowerCase(); // "Characters" → "characters"
   const rest = parts.slice(2).join("/");
-  return `${parts[0].toUpperCase()}/${prefix}${folder.slice(1).toLowerCase()}${rest ? `/${rest}` : ""}`;
+  return `${parts[0].toUpperCase()}/@${prefixNoAt}${suffix}${rest ? `/${rest}` : ""}`;
 }
 
 const failures = new WeakMap<Uint8Array, string>();
