@@ -389,13 +389,15 @@ export function Fix() {
             transition={{ duration: 0.18 }}
             className={cn(
               "fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur-xl",
-              dark ? "border-white/15 bg-black/75 text-white" : "border-black/10 bg-white/85 text-[#12141a]",
+              dark
+                ? "border-emerald-400/30 bg-black/75 text-white"
+                : "border-emerald-500/25 bg-white/85 text-[#12141a]",
             )}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
               <motion.path
                 d="M2.5 7L5.5 10L11.5 4"
-                stroke="currentColor"
+                stroke="rgb(52 211 153)"
                 strokeWidth="1.75"
                 strokeLinecap="round"
                 strokeLinejoin="round"
