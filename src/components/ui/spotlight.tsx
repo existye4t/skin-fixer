@@ -36,7 +36,8 @@ export function SpotlightPanel({ children, className, dark, radius = 220, style 
     setVisible(false);
   }, []);
 
-  const spotColor = dark ? "rgba(255,255,255,0.055)" : "rgba(0,0,0,0.04)";
+  // Dark: white at low opacity; Light: ink (near-black) at higher opacity — paper bg needs more contrast
+  const spotColor = dark ? "rgba(255,255,255,0.06)" : "rgba(18,20,26,0.11)";
 
   return (
     <div
