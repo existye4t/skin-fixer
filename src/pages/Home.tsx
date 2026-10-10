@@ -1,6 +1,6 @@
-import { useRef } from "react";
+
 import { ArrowRight } from "lucide-react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useSpring, useTransform } from "framer-motion";
 import { Link } from "react-router-dom";
 
 import { DiscordCard, DiscordProfile } from "@/components/DiscordCard";
@@ -24,6 +24,11 @@ export function Home() {
   const { t } = useI18n();
   const { reduced } = useMotionSetting();
   const dark = theme === "dark";
+
+  // Subtle parallax on TopoField: moves at ~28% of scroll speed
+  const { scrollY } = useScroll();
+  const rawParallax = useTransform(scrollY, [0, 1200], [0, -340]);
+  const parallaxY = useSpring(rawParallax, { stiffness: 60, damping: 20 });
   const steps = [
     ["01", t.step1t, t.step1b],
     ["02", t.step2t, t.step2b],
@@ -32,7 +37,12 @@ export function Home() {
 
   return (
     <div className={cn("relative min-h-screen overflow-hidden", dark ? "text-white" : "text-[#12141a]")}>
-      <TopoField mode={theme} className="pointer-events-none fixed inset-0" density={0.9} />
+      <motion.div
+        className="pointer-events-none fixed inset-0"
+        style={reduced ? {} : { y: parallaxY }}
+      >
+        <TopoField mode={theme} className="absolute inset-0" density={0.9} />
+      </motion.div>
       <div
         className={cn(
           "pointer-events-none fixed inset-0",
@@ -165,24 +175,57 @@ export function Home() {
   );
 }
 
+const aboutEase = [0.22, 1, 0.36, 1] as const;
+
+const aboutContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+const aboutItem = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: aboutEase } },
+};
+
 function About() {
   const { t } = useI18n();
+  const { reduced } = useMotionSetting();
   const dark = useTheme().theme === "dark";
-  const ref = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "start 0.35"] });
-  const opacity = useTransform(scrollYProgress, [0, 1], [0, 1]);
-  const y = useTransform(scrollYProgress, [0, 1], [48, 0]);
 
   return (
-    <section ref={ref} className="relative z-10 mx-auto min-h-[80vh] max-w-3xl px-6 py-28">
-      <motion.div style={{ opacity, y }}>
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.about}</p>
-        <h2 className="mt-3 text-4xl font-light tracking-tight sm:text-5xl">{t.aboutTitle}</h2>
-        <p className={cn("mt-6 text-base font-light leading-relaxed", dark ? "text-neutral-300" : "text-neutral-700")}>{t.aboutHow}</p>
-        <p className={cn("mt-4 text-base font-light leading-relaxed", dark ? "text-neutral-300" : "text-neutral-700")}>{t.aboutWho}</p>
-        <div className="mt-8">
+    <section className="relative z-10 mx-auto min-h-[80vh] max-w-3xl px-6 py-28">
+      <motion.div
+        initial={reduced ? false : "hidden"}
+        whileInView="visible"
+        viewport={{ once: true, margin: "-15%" }}
+        variants={reduced ? {} : aboutContainer}
+      >
+        <motion.p
+          variants={reduced ? {} : aboutItem}
+          className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500"
+        >
+          {t.about}
+        </motion.p>
+        <motion.h2
+          variants={reduced ? {} : aboutItem}
+          className="mt-3 text-4xl font-light tracking-tight sm:text-5xl"
+        >
+          {t.aboutTitle}
+        </motion.h2>
+        <motion.p
+          variants={reduced ? {} : aboutItem}
+          className={cn("mt-6 text-base font-light leading-relaxed", dark ? "text-neutral-300" : "text-neutral-700")}
+        >
+          {t.aboutHow}
+        </motion.p>
+        <motion.p
+          variants={reduced ? {} : aboutItem}
+          className={cn("mt-4 text-base font-light leading-relaxed", dark ? "text-neutral-300" : "text-neutral-700")}
+        >
+          {t.aboutWho}
+        </motion.p>
+        <motion.div variants={reduced ? {} : aboutItem} className="mt-8">
           <DiscordProfile />
-        </div>
+        </motion.div>
       </motion.div>
     </section>
   );
