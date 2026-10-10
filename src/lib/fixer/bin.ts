@@ -38,7 +38,7 @@ class Reader {
     }
     if (type === 130) {
       const hash = this.u32();
-      // Pointer/Embed: hash(4) then if non-zero: size(4) → count(2) → fields
+      // Pointer: hash(4) then if non-zero: size(4) → count(2) → fields
       return { kind: "embed", hash, fields: hash === 0 ? [] : this.embedBlock() };
     }
     if (type === 131) {
@@ -199,8 +199,7 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     const entries = names.map(() => reader.block());
     entries.forEach((entry) => entry.fields.forEach((field) => visit(field.value, prefix)));
 
-    // Read patches section (PTCH files, version >= 3)
-    // patches are also visited for string repathing
+    // Read patches section (PTCH files) — all versions, matching cslol-go FixerRear.cs
     type PatchEntry = { hash: number; pathType: number; path: string; value: Value };
     const patches: PatchEntry[] = [];
     if (patch) {

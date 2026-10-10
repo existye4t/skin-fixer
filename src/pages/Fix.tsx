@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Download, FileUp } from "lucide-react";
+import { ArrowLeft, CheckCircle, Download, FileUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { DiscordCard } from "@/components/DiscordCard";
@@ -9,12 +9,29 @@ import { SettingsButton } from "@/components/SettingsButton";
 import { SourceLink } from "@/components/SourceLink";
 import { OptionRow, Segmented } from "@/components/OptionRow";
 import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
+import { Button } from "@/components/ui/button";
+import { SpotlightPanel } from "@/components/ui/spotlight";
 import TopoField from "@/components/ui/topo-field";
 import { fixSkin, inspectSkin } from "@/lib/fixer/pipeline";
 import { DEFAULT_OPTIONS, type FixerOptions, type FixReport, type ImportReport, type LogLine } from "@/lib/fixer/types";
 import { useI18n } from "@/lib/i18n";
+import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.04 } },
+};
+const EASE = [0.22, 1, 0.36, 1] as [number, number, number, number];
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: EASE } },
+};
+const staggerItemFast = {
+  hidden: { opacity: 0, y: 6 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.18, ease: EASE } },
+};
 
 const TONES = {
   act: "text-sky-500",
@@ -33,6 +50,7 @@ function formatBytes(bytes: number) {
 export function Fix() {
   const { theme } = useTheme();
   const { t } = useI18n();
+  const { reduced } = useMotionSetting();
   const dark = theme === "dark";
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -46,6 +64,7 @@ export function Fix() {
   const [pageKey, setPageKey] = useState(0);
   const [done, setDone] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   function resetPage() {
     setFile(null);
@@ -83,6 +102,9 @@ export function Fix() {
     setResult(null);
     setBlob(null);
     setLogs([]);
+    // Yield to the browser so React can paint "busy" state before the heavy
+    // JSZip.loadAsync decompress blocks the main thread for large files.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     try {
       const fixed = await fixSkin(file, report, options, (line) =>
         setLogs((current) => [...current, { ...line, id: current.length + 1 }]),
@@ -111,16 +133,20 @@ export function Fix() {
 
   const panel = cn("rounded-3xl border backdrop-blur-xl", dark ? "border-white/10 bg-black/55" : "border-black/10 bg-white/75");
   const field = cn("w-full rounded-xl border bg-transparent px-3 py-2 text-sm outline-none", dark ? "border-white/15" : "border-black/10");
-  const facts = report
-    ? [
-        [t.champion, report.character ?? t.unknown],
-        [t.kind, report.kind],
-        [t.entries, String(report.entries.length)],
-        [t.size, formatBytes(report.bytes)],
-        [t.bins, String(report.bins.length)],
-        [t.skins, report.skinNumbers.join(", ") || "—"],
-      ]
-    : [];
+  const facts = useMemo(
+    () =>
+      report
+        ? [
+            [t.champion, report.character ?? t.unknown],
+            [t.kind, report.kind],
+            [t.entries, String(report.entries.length)],
+            [t.size, formatBytes(report.bytes)],
+            [t.bins, String(report.bins.length)],
+            [t.skins, report.skinNumbers.join(", ") || "—"],
+          ]
+        : [],
+    [report, t],
+  );
 
   return (
     <div className={cn("relative", dark ? "text-white" : "text-[#12141a]")}>
@@ -131,69 +157,126 @@ export function Fix() {
             <ArrowLeft size={15} /> {t.back}
           </Link>
           <div className="flex items-center gap-2">
-            <SourceLink />
-            <DiscordCard />
-            <SettingsButton />
-            <LanguageSwitch />
+            <div
+              className={cn(
+                "flex items-center overflow-hidden rounded-full border [&>*]:rounded-none [&>*]:border-0",
+                dark ? "border-white/15" : "border-black/10",
+              )}
+            >
+              <SpotlightPanel dark={dark} radius={80} className="flex items-center">
+                <SourceLink />
+                <span className={cn("hidden sm:block w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <DiscordCard />
+                <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <SettingsButton />
+                <span className={cn("w-px self-stretch", dark ? "bg-white/10" : "bg-black/10")} />
+                <LanguageSwitch />
+              </SpotlightPanel>
+            </div>
             <AnimatedThemeToggle />
           </div>
         </header>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <motion.section key={pageKey} layout className={cn(panel, "p-6 sm:p-8")}>
+          <SpotlightPanel dark={dark} className={cn(panel, "overflow-hidden")}>
+          <motion.section key={pageKey} layout className="p-6 sm:p-8">
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.importKicker}</p>
             <h1 className="mt-2 text-4xl font-light tracking-tight">{t.dropTitle}</h1>
-            <button
+            <motion.button
               type="button"
               onClick={() => inputRef.current?.click()}
               onDragOver={(event) => event.preventDefault()}
+              onDragEnter={(event) => { event.preventDefault(); setDragOver(true); }}
+              onDragLeave={(event) => { event.preventDefault(); setDragOver(false); }}
               onDrop={(event) => {
                 event.preventDefault();
+                setDragOver(false);
                 void onFile(event.dataTransfer.files[0] ?? null);
               }}
+              animate={{
+                scale: dragOver ? 1.012 : 1,
+                opacity: dragOver ? 1 : undefined,
+              }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
               className={cn(
                 "mt-6 flex w-full flex-col items-center rounded-2xl border border-dashed px-6 py-16 transition-colors",
-                dark ? "border-white/15 hover:bg-white/5" : "border-black/15 hover:bg-black/[0.03]",
+                dark
+                  ? dragOver ? "border-white/40 bg-white/5" : "border-white/15 hover:bg-white/5"
+                  : dragOver ? "border-black/25 bg-black/[0.03]" : "border-black/15 hover:bg-black/[0.03]",
               )}
             >
-              <FileUp size={20} strokeWidth={1.5} />
+              <AnimatePresence mode="popLayout" initial={false}>
+                {file ? (
+                  <motion.span
+                    key="check"
+                    initial={reduced ? false : { opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduced ? {} : { opacity: 0, scale: 0.7 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <CheckCircle size={20} strokeWidth={1.5} />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="upload"
+                    initial={reduced ? false : { opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduced ? {} : { opacity: 0, scale: 0.7 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <FileUp size={20} strokeWidth={1.5} />
+                  </motion.span>
+                )}
+              </AnimatePresence>
               <span className="mt-3 text-sm">{file?.name ?? t.dropIdle}</span>
               <span className="mt-1 text-xs text-neutral-500">{t.dropHint}</span>
-            </button>
+            </motion.button>
             <input ref={inputRef} hidden type="file" accept=".zip,.fantome" onChange={(event) => void onFile(event.target.files?.[0] ?? null)} />
             {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
             <AnimatePresence>
               {report && (
-                <motion.dl initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <motion.dl
+                  initial="hidden"
+                  animate="visible"
+                  variants={reduced ? {} : staggerContainer}
+                  className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3"
+                >
                   {facts.map(([label, value]) => (
-                    <div key={label} className={cn("rounded-2xl border px-3 py-3", dark ? "border-white/10" : "border-black/10")}>
+                    <motion.div
+                      key={label}
+                      variants={reduced ? {} : staggerItem}
+                      className={cn("rounded-2xl border px-3 py-3", dark ? "border-white/10" : "border-black/10")}
+                    >
                       <dt className="text-[11px] uppercase tracking-[0.14em] text-neutral-500">{label}</dt>
                       <dd className="mt-1 truncate font-light">{value}</dd>
-                    </div>
+                    </motion.div>
                   ))}
                 </motion.dl>
               )}
             </AnimatePresence>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
-                disabled={!report || busy}
-                onClick={() => void run()}
-                className={cn("glow rounded-full px-5 py-2.5 text-sm disabled:opacity-40", dark ? "bg-white text-black" : "bg-[#12141a] text-white")}
-              >
-                {busy ? t.fixing : t.fix}
-              </button>
+              <motion.div whileTap={reduced ? {} : { scale: 0.96 }}>
+                <Button
+                  variant={dark ? "default" : "paper"}
+                  size="pill-sm"
+                  disabled={!report || busy}
+                  onClick={() => void run()}
+                  className="glow"
+                >
+                  {busy ? t.fixing : t.fix}
+                </Button>
+              </motion.div>
               {blob && (
-                <button type="button" onClick={download} className="glow inline-flex items-center gap-2 rounded-full border border-current/15 px-5 py-2.5 text-sm">
+                <Button variant="currentOutline" size="pill-sm" onClick={download} className="glow gap-2">
                   <Download size={15} /> {t.download}
-                </button>
+                </Button>
               )}
               {(file || result) && (
-                <button type="button" onClick={resetPage} className="rounded-full px-5 py-2.5 text-sm text-neutral-500 hover:text-current">
+                <Button variant="subtle" size="pill-sm" onClick={resetPage}>
                   {t.resetPage}
-                </button>
+                </Button>
               )}
             </div>
             {logs.length > 0 && (
@@ -214,9 +297,19 @@ export function Fix() {
                   </button>
                 </div>
                 <ol className={cn("max-h-64 overflow-auto rounded-2xl border p-4 font-mono text-xs leading-6", dark ? "border-white/10" : "border-black/10")}>
-                  {logs.map((line) => (
-                    <li key={line.id} className={TONES[line.tone]}>{line.text}</li>
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {logs.map((line) => (
+                      <motion.li
+                        key={line.id}
+                        initial={reduced ? false : { opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className={TONES[line.tone]}
+                      >
+                        {line.text}
+                      </motion.li>
+                    ))}
+                  </AnimatePresence>
                 </ol>
               </div>
             )}
@@ -227,8 +320,10 @@ export function Fix() {
               </p>
             )}
           </motion.section>
+          </SpotlightPanel>
 
-          <aside className={cn(panel, "p-5")}>
+          <aside className={cn(panel, "overflow-hidden")}>
+          <SpotlightPanel dark={dark} className="p-5">
             <div className="flex items-center justify-between">
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.pass}</p>
               <button
@@ -247,7 +342,13 @@ export function Fix() {
               <span className="text-neutral-500">{t.affix}</span>
               <input className={cn(field, "mt-1.5")} value={options.affix} placeholder={t.affixHint} onChange={(event) => setOptions({ ...options, affix: event.target.value })} />
             </label>
-            <div className={cn("mt-3 divide-y", dark ? "divide-white/10" : "divide-black/8")}>
+            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsContent}</p>
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={reduced ? {} : { ...staggerContainer, visible: { transition: { staggerChildren: 0.03 } } }}
+              className={cn("mt-2 divide-y", dark ? "divide-white/10" : "divide-black/8")}
+            >
               {(
                 [
                   ["allAvailable", t.allAvailable],
@@ -261,21 +362,27 @@ export function Fix() {
                   ["repathInFile", t.repathInFile],
                 ] as const
               ).map(([key, label]) => (
-                <OptionRow key={key} label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={(checked) => setOptions({ ...options, [key]: checked })} />
+                <motion.div key={key} variants={reduced ? {} : staggerItemFast}>
+                  <OptionRow label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={(checked) => setOptions({ ...options, [key]: checked })} />
+                </motion.div>
               ))}
+            </motion.div>
+            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsAudio}</p>
+            <div className="mt-2">
+              <Segmented
+                label={t.sound}
+                value={options.sound}
+                options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
+                onChange={(sound) => setOptions({ ...options, sound })}
+              />
+              <Segmented
+                label={t.animation}
+                value={options.animation}
+                options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
+                onChange={(animation) => setOptions({ ...options, animation })}
+              />
             </div>
-            <Segmented
-              label={t.sound}
-              value={options.sound}
-              options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
-              onChange={(sound) => setOptions({ ...options, sound })}
-            />
-            <Segmented
-              label={t.animation}
-              value={options.animation}
-              options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]}
-              onChange={(animation) => setOptions({ ...options, animation })}
-            />
+          </SpotlightPanel>
           </aside>
         </div>
       </div>
@@ -287,10 +394,27 @@ export function Fix() {
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.18 }}
             className={cn(
-              "fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur-xl",
-              dark ? "border-white/15 bg-black/75 text-white" : "border-black/10 bg-white/85 text-[#12141a]",
+              "fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-lg backdrop-blur-xl",
+              dark
+                ? "border-emerald-400/30 bg-black/75 text-white"
+                : "border-emerald-500/25 bg-white/85 text-[#12141a]",
             )}
           >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+              <motion.path
+                d="M2.5 7L5.5 10L11.5 4"
+                stroke="rgb(52 211 153)"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 1 }}
+                transition={reduced
+                  ? { duration: 0 }
+                  : { pathLength: { duration: 0.35, delay: 0.05, ease: "easeOut" }, opacity: { duration: 0.1 } }
+                }
+              />
+            </svg>
             {t.done}
           </motion.div>
         )}
