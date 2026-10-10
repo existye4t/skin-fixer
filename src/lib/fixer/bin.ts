@@ -38,9 +38,13 @@ class Reader {
     }
     if (type === 130) {
       const hash = this.u32();
-      return { kind: "embed", hash, fields: hash === 0 ? [] : this.block().fields };
+      // Pointer/Embed: hash(4) then if non-zero: size(4) → count(2) → fields
+      return { kind: "embed", hash, fields: hash === 0 ? [] : this.embedBlock() };
     }
-    if (type === 131) return { kind: "embed", hash: this.u32(), fields: this.block().fields };
+    if (type === 131) {
+      // Embed: always has size(4) → count(2) → fields
+      return { kind: "embed", hash: this.u32(), fields: this.embedBlock() };
+    }
     if (type === 132) return { kind: "raw", type, bytes: this.bytes(4) };
     if (type === 133) {
       const itemType = this.u8();
@@ -66,18 +70,36 @@ class Reader {
     return { kind: "raw", type, bytes: this.bytes(width) };
   }
 
+  // Top-level entry block: size(4) → [key(4) + count(2) + fields]
+  // size covers everything after itself: key, count, and fields.
+  // Matches C# ReadEntry: length = ReadU32(); startPos = _offset; key = ReadFNV1a(); count = ReadU16(); ...
   block() {
     const size = this.u32();
     const start = this.offset;
     const key = this.u32();
     const count = this.u16();
     const fields = Array.from({ length: count }, () => {
+      const fkey = this.u32();
+      const type = this.u8();
+      return { key: fkey, type, value: this.value(type) };
+    });
+    if (this.offset !== start + size) throw new Error("block size");
+    return { key, fields };
+  }
+
+  // Embedded block (types 130/131): size(4) → [count(2) + fields]  — no entry key
+  // Matches C# Pointer/Embed case: size = ReadU32(); startPos = _offset; count = ReadU16(); ...
+  embedBlock() {
+    const size = this.u32();
+    const start = this.offset;
+    const count = this.u16();
+    const fields = Array.from({ length: count }, () => {
       const key = this.u32();
       const type = this.u8();
       return { key, type, value: this.value(type) };
     });
-    if (this.offset !== start + size) throw new Error("block size");
-    return { key, fields };
+    if (this.offset !== start + size) throw new Error("embed size");
+    return fields;
   }
 }
 
@@ -97,6 +119,8 @@ class Writer {
       return;
     }
     if (node.kind === "embed") {
+      // Write: hash(4) then if non-zero: size(4) → count(2) → fields
+      // size covers count+fields (NOT hash), matching embedBlock() reader
       this.u32(node.hash);
       if (node.hash === 0 && !node.fields.length) return;
       this.sized(() => this.fields(node.fields));
@@ -173,9 +197,13 @@ export function retargetBin(data: Uint8Array, prefix: string) {
     if (version >= 2) { writer.u32(linked.length); linked.forEach((item) => writer.string(item)); }
     writer.u32(entries.length);
     names.forEach((hash) => writer.u32(hash));
+    // Write each entry: size(4) → [key(4) + fields]
+    // size covers key+fields, matching block() reader
     entries.forEach((entry) => {
-      writer.u32(entry.key);
-      writer.sized(() => writer.fields(entry.fields));
+      writer.sized(() => {
+        writer.u32(entry.key);
+        writer.fields(entry.fields);
+      });
     });
     return writer.finish();
   } catch (error) {
