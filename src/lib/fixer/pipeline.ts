@@ -427,22 +427,23 @@ export async function fixSkin(
         zipEntries[`WAD/${character}.wad.client`] = wadBin;
 
         // Pass through original META/info.json — preserve all original fields
-        // Only add missing META files (hashes etc), never overwrite info.json
-        const hasInfoJson = metaFiles.some(m => /meta\/info\.json$/i.test(m.path));
-        if (!hasInfoJson) {
-          // Read original info.json from input if present
-          let infoData: Uint8Array | null = null;
-          try {
-            const origZip = await JSZip.loadAsync(file);
-            const origInfo = origZip.file(/meta\/info\.json$/i)[0];
-            if (origInfo) infoData = await origInfo.async("uint8array");
-          } catch { /* ignore */ }
-          if (!infoData) {
-            const info = { Name: report.title || outputName.replace(/_fixed\.fantome$/, ""), Author: report.author || "Exist", Version: report.version || "1.0", Description: report.description || "" };
-            infoData = new TextEncoder().encode(JSON.stringify(info, null, 2));
-          }
-          zipEntries["META/info.json"] = infoData;
-        }
+                // Only add missing META files (hashes etc), never overwrite info.json
+                const hasInfoJson = metaFiles.some(m => /meta\/info\.json$/i.test(m.path));
+                if (!hasInfoJson) {
+                  // Read original info.json bytes directly from input zip (unzipSync is already imported)
+                  let infoData: Uint8Array | null = null;
+                  try {
+                    const origBuf = new Uint8Array(await file.arrayBuffer());
+                    const origEntries = unzipSync(origBuf);
+                    const key = Object.keys(origEntries).find(k => /meta\/info\.json$/i.test(k));
+                    if (key) infoData = origEntries[key];
+                  } catch { /* ignore */ }
+                  if (!infoData) {
+                    const info = { Name: report.title || outputName.replace(/_fixed\.fantome$/, ""), Author: report.author || "Exist", Version: report.version || "1.0", Description: report.description || "" };
+                    infoData = new TextEncoder().encode(JSON.stringify(info, null, 2));
+                  }
+                  zipEntries["META/info.json"] = infoData;
+                }
         for (const m of metaFiles) zipEntries[m.path] = m.data;
 
         blob = new Blob([zipSync(zipEntries, { level: 0 })], { type: "application/octet-stream" });
