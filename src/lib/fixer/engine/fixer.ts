@@ -285,7 +285,7 @@ export class Fixer {
       }
       if (toCheck.length) { const nf = await this.checkLinked(toCheck); if (nf) for (const l of nf) { missingLinked.push(l); this.missingLinked.push(l); } }
       const entries = bin.sections.get("entries") as unknown as BinMap | undefined;
-      if (entries && entries.t === T.Map) { for (const kvp of entries.items) { const h = (kvp.k.v as FnvRef).h; if (h === 0) continue; const d = dicts[classMap[h] || "other"]; if (!d.has(h)) d.set(h, kvp as unknown as { k: BinValue; v: BinValue }); } }
+      if (entries && entries.t === T.Map) { for (const kvp of entries.items) { const h = (kvp.v as unknown as BinEmbed).name.h; if (h === 0) continue; const d = dicts[classMap[h] || "other"]; if (!d.has(h)) d.set(h, kvp as unknown as { k: BinValue; v: BinValue }); } }
     }
     const C = char;
     if (dicts.skin.size > 1) validate(dicts.skin as unknown as Map<number, unknown>, [fnv1a(`Characters/${C}/Skins/Skin${skinNo}`)]);
