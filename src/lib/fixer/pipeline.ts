@@ -1,13 +1,14 @@
 import JSZip from "jszip";
-import { unzipSync } from "fflate";
+import { unzipSync, zipSync } from "fflate";
 import { decompress as zstdDecompress } from "fzstd";
 import { decode as msgpackDecode } from "@msgpack/msgpack";
 
 import { buildModpkg } from "./modpkg";
 import type { FixerOptions, FixReport, ImportReport, LogLine, WadEntry, WadKind } from "./types";
-import { ModSource } from "./engine/wad";
+import { ModSource, buildWad } from "./engine/wad";
 import { GameIndex, filesFromDirHandle, filesFromFileList } from "./engine/game";
 import { NameDB } from "./engine/names";
+import { hashPath } from "./engine/hash";
 import { Fixer } from "./engine/fixer";
 
 const FNV_OFFSET = 0x811c9dc5;
@@ -387,26 +388,50 @@ export async function fixSkin(
   }
 
   const outputName = file.name
-      .replace(/\.(zip|wad|client)$/i, ".fantome")
-      .replace(/\.fantome$/i, "_fixed.fantome")
-      .replace(/\.modpkg$/i, "_fixed.modpkg");
-    const files: { path: string; data: Uint8Array }[] = [];
+        .replace(/\.(zip|wad|client)$/i, ".fantome")
+        .replace(/\.fantome$/i, "_fixed.fantome")
+        .replace(/\.modpkg$/i, "_fixed.modpkg");
+      const files: { path: string; data: Uint8Array }[] = [];
 
-  for (const [path, data] of fixResult.files) {
-    files.push({ path, data });
-  }
+    for (const [path, data] of fixResult.files) {
+      files.push({ path, data });
+    }
 
-  // Add META/hashes if we have it
-  const index = files.map(f => f.path).filter(p => !p.toUpperCase().startsWith("META/"));
-  files.push({ path: "META/hashes.game.txt", data: new TextEncoder().encode(index.join("\n") + "\n") });
+    // Add META/hashes if we have it
+    const index = files.map(f => f.path).filter(p => !p.toUpperCase().startsWith("META/"));
+    files.push({ path: "META/hashes.game.txt", data: new TextEncoder().encode(index.join("\n") + "\n") });
 
-  const missing = fixResult.missing;
-  const kept = files.length;
-  const repaths = fixResult.hashTable.length;
+    const missing = fixResult.missing;
+    const kept = files.length;
+    const repaths = fixResult.hashTable.length;
 
-  onLog({ tone: "good", text: `[OUT] ${outputName} · ${kept} files · ${missing.length} missing` });
+    onLog({ tone: "good", text: `[OUT] ${outputName} · ${kept} files · ${missing.length} missing` });
 
-  const blob = await buildModpkg(report, `${character}.wad.client`, files);
+    let blob: Blob;
+    if (kindOf(file.name) === "modpkg") {
+      blob = await buildModpkg(report, `${character}.wad.client`, files);
+    } else {
+      // Build a fantome zip: WAD/<character>.wad.client contains the WAD binary
+      const wadFiles: { hash: bigint; data: Uint8Array }[] = [];
+      const metaFiles: { path: string; data: Uint8Array }[] = [];
+      for (const f of files) {
+        if (f.path.toUpperCase().startsWith("META/")) {
+          metaFiles.push(f);
+        } else {
+          wadFiles.push({ hash: hashPath(f.path), data: f.data });
+        }
+      }
+      const wadBin = buildWad(wadFiles);
+      const zipEntries: Record<string, Uint8Array> = {};
+      zipEntries[`WAD/${character}.wad.client`] = wadBin;
+      for (const m of metaFiles) zipEntries[m.path] = m.data;
+      // Add META/info.json
+      if (!metaFiles.some(m => /meta\/info\.json$/i.test(m.path))) {
+        const info = { Name: report.title || outputName.replace(/_fixed\.fantome$/, ""), Author: report.author || "", Version: report.version || "0.0.0" };
+        zipEntries["META/info.json"] = new TextEncoder().encode(JSON.stringify(info));
+      }
+      blob = new Blob([zipSync(zipEntries, { level: 0 })], { type: "application/octet-stream" });
+    }
   return {
     blob,
     result: { character, skinNo, scanned: report.entries.length, bins: report.bins.length, repaths, kept, dropped: 0, missing, outputName },
