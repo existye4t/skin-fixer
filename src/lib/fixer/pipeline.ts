@@ -278,7 +278,7 @@ async function buildModSource(file: File): Promise<ModSource> {
     const wadFiles: [string, Uint8Array][] = [];
     const loose = new Map<string, Map<string, Uint8Array>>();
     for (const [name, data] of Object.entries(z)) {
-      const m = /^WAD\/([^/]+?\\.wad(?:\.client)?)(?:\/(.+))?$/i.exec(name);
+      const m = /^WAD\/([^/]+?\.wad(?:\.client)?)(?:\/(.+))?$/i.exec(name);
       if (!m || (!data.length && name.endsWith("/"))) continue;
       if (m[2]) { if (!loose.has(m[1])) loose.set(m[1], new Map()); loose.get(m[1])!.set(m[2], data); }
       else wadFiles.push([m[1], data]);
