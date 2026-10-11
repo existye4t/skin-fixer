@@ -416,7 +416,7 @@ export class Fixer {
     this.put(this.out, concatPath, writeBin(makeBin([], concat)));
     linked.push(concatPath);
     if (staticMat.items.length && !s.killStaticMat) { this.put(this.out, smPath, writeBin(makeBin([], staticMat))); linked.push(smPath); }
-    const linkedStrings = [...keptLinked, ...missingLinked, ...linked];
+    const linkedStrings = [...keptLinked, ...linked];
     this.put(this.out, binPath, writeBin(makeBin(linkedStrings, entries)));
     this.log(`[OK] ${binPath}`, "good");
     if (s.noskinni && skinNo === 0 && this.game?.ready && refs.skinKey) {
