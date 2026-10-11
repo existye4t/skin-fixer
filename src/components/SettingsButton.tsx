@@ -5,14 +5,17 @@ import { Settings } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useMotionSetting } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
+import { useSettings } from "@/lib/settings";
 import { SpotlightPanel } from "@/components/ui/spotlight";
 import { cn } from "@/lib/utils";
 
 export function SettingsButton() {
   const { t } = useI18n();
-  const { reduced, setReduced } = useMotionSetting();
-  const dark = useTheme().theme === "dark";
-  const [open, setOpen] = useState(false);
+      const { reduced, setReduced } = useMotionSetting();
+      const dark = useTheme().theme === "dark";
+      const [open, setOpen] = useState(false);
+      const { settings, setSetting } = useSettings();
+      const rememberFolder = settings.rememberGameFolder;
 
   return (
     <>
@@ -45,9 +48,16 @@ export function SettingsButton() {
               <SpotlightPanel dark={dark} className="p-5" radius={200}>
                 <h2 className="text-lg font-light">{t.settings}</h2>
                 <button type="button" onClick={() => setReduced(!reduced)} className="mt-4 flex w-full items-center justify-between text-sm">
-                  {t.reduceMotion}
-                  <span className={cn("text-xs", dark ? "text-neutral-400" : "text-neutral-500")}>{reduced ? t.on : t.off}</span>
-                </button>
+                                  {t.reduceMotion}
+                                  <span className={cn("text-xs", dark ? "text-neutral-400" : "text-neutral-500")}>{reduced ? t.on : t.off}</span>
+                                </button>
+                                <button type="button" onClick={() => setSetting("rememberGameFolder", !rememberFolder)} className="mt-4 flex w-full flex-col items-start text-sm">
+                                  <div className="flex w-full items-center justify-between">
+                                    {t.rememberGameFolder}
+                                    <span className={cn("text-xs", dark ? "text-neutral-400" : "text-neutral-500")}>{rememberFolder ? t.on : t.off}</span>
+                                  </div>
+                                  <span className={cn("mt-0.5 text-xs", dark ? "text-neutral-500" : "text-neutral-400")}>{t.rememberGameFolderHint}</span>
+                                </button>
                 <button type="button" onClick={() => setOpen(false)} className="mt-5 text-sm text-neutral-500">{t.close}</button>
               </SpotlightPanel>
             </motion.div>

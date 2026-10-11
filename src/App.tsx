@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { I18nProvider } from "@/lib/i18n";
 import { MotionProvider, useMotionSetting } from "@/lib/motion";
+import { SettingsProvider } from "@/lib/settings";
 import { ThemeProvider } from "@/lib/theme";
 import { Fix } from "@/pages/Fix";
 import { Home } from "@/pages/Home";
@@ -40,6 +41,7 @@ function AnimatedRoutes() {
 export default function App() {
   return (
     <ThemeProvider>
+      <SettingsProvider>
       <MotionProvider>
       <I18nProvider>
         <BrowserRouter basename="/skin-fixer">
@@ -47,6 +49,7 @@ export default function App() {
         </BrowserRouter>
       </I18nProvider>
       </MotionProvider>
+      </SettingsProvider>
     </ThemeProvider>
   );
 }

@@ -38,11 +38,23 @@ export type FixerOptions = {
   animation: "auto" | "include" | "exclude";
   affix: string;
   repathInFile: boolean;
+  // Full engine options (skin-fixer-web)
+  apply1617: boolean;
+  convertBeforeCollect: boolean;
+  useGameIndex: boolean;
+};
+
+/** State for the optional game folder (DATA/FINAL directory) */
+export type GameIndexState = {
+  status: "idle" | "loading" | "ready" | "error";
+  wadCount: number;
+  fileCount: number;
+  message: string;
 };
 
 export type LogLine = {
   id: number;
-  tone: "act" | "warn" | "good" | "err" | "mod";
+  tone: "act" | "warn" | "good" | "err" | "mod" | "head";
   text: string;
 };
 
@@ -72,4 +84,7 @@ export const DEFAULT_OPTIONS: FixerOptions = {
   animation: "auto",
   affix: "",
   repathInFile: true,
+  apply1617: true,
+  convertBeforeCollect: true,
+  useGameIndex: false,
 };
