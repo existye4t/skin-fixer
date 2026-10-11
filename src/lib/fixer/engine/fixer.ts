@@ -401,7 +401,7 @@ export class Fixer {
     if (!this._repathSet) { this.s.repath_path_path = s.prefix || `@${char.slice(0, 4)}${skinNo}`; this._repathSet = true; this.pf.s = this.s; }
     const ld = await this.loadAllBins(binPath, char, skinNo, job.hp, queue);
     if (!ld) return false;
-    const { entries, concat, staticMat, targets, linked, keptLinked, missingLinked, refs } = ld;
+    const { entries, concat, staticMat, targets, linked, keptLinked, refs } = ld;
     if (s.apply1617 && !s.convertBeforeCollect) {
       const tracker = new ConvertedStringsTracker();
       for (const m of [entries, concat, staticMat]) this.conv.convertBinMap(m, tracker);
