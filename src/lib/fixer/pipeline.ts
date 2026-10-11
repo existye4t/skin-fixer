@@ -394,16 +394,12 @@ export async function fixSkin(
       const files: { path: string; data: Uint8Array }[] = [];
 
     for (const [path, data] of fixResult.files) {
-      files.push({ path, data });
-    }
+        files.push({ path, data });
+      }
 
-    // Add META/hashes if we have it
-    const index = files.map(f => f.path).filter(p => !p.toUpperCase().startsWith("META/"));
-    files.push({ path: "META/hashes.game.txt", data: new TextEncoder().encode(index.join("\n") + "\n") });
-
-    const missing = fixResult.missing;
-    const kept = files.length;
-    const repaths = fixResult.hashTable.length;
+      const missing = fixResult.missing;
+      const kept = files.length;
+      const repaths = fixResult.hashTable.length;
 
     onLog({ tone: "good", text: `[OUT] ${outputName} · ${kept} files · ${missing.length} missing` });
 
