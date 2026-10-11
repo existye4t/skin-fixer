@@ -1,5 +1,7 @@
 import JSZip from "jszip";
 import { unzipSync } from "fflate";
+import { decompress as zstdDecompress } from "fzstd";
+import { decode as msgpackDecode } from "@msgpack/msgpack";
 
 import { buildModpkg } from "./modpkg";
 import type { FixerOptions, FixReport, ImportReport, LogLine, WadEntry, WadKind } from "./types";
@@ -26,6 +28,7 @@ function extensionOf(path: string) { const dot = path.lastIndexOf("."); return d
 function kindOf(name: string): WadKind {
   const lower = name.toLowerCase();
   if (lower.endsWith(".fantome")) return "fantome";
+  if (lower.endsWith(".modpkg")) return "modpkg";
   if (lower.endsWith(".wad.client") || lower.endsWith(".wad")) return "archive";
   if (lower.endsWith(".zip")) return "zip";
   return "folder";
@@ -45,6 +48,10 @@ function tally(scores: Map<string, number>, name: string | undefined, weight: nu
 
 export async function inspectSkin(file: File): Promise<ImportReport> {
   const kind = kindOf(file.name);
+
+  // .modpkg: binary format — read without JSZip
+  if (kind === "modpkg") return inspectModpkg(file);
+
   const entries: WadEntry[] = [];
   const zip = await JSZip.loadAsync(file);
   zip.forEach((path, entry) => {
@@ -126,10 +133,144 @@ export async function loadHashNames(onProgress?: (msg: string) => void): Promise
   onProgress?.(`Ready (${_names.byHash!.size.toLocaleString()} names).`);
 }
 
-// ---- Build ModSource from zip file ----
+// ---- .modpkg reader ----
+const MODPKG_MAGIC = "_modpkg_";
+
+async function readModpkgRaw(file: File): Promise<{
+  paths: string[];
+  wads: string[];
+  files: Map<string, Uint8Array>; // fullPath → data
+  meta: Record<string, unknown> | null;
+}> {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let pos = 0;
+
+  const magic = new TextDecoder().decode(buf.slice(0, 8));
+  if (magic !== MODPKG_MAGIC) throw new Error("Not a valid .modpkg file (bad magic)");
+  pos = 8;
+
+  /* version */ dv.getUint32(pos, true); pos += 4;
+  /* reserved */ dv.getUint32(pos, true); pos += 4;
+  const fileCount = dv.getUint32(pos, true); pos += 4;
+  /* layerCount */ dv.getUint32(pos, true); pos += 4;
+  const layerNameLen = dv.getUint32(pos, true); pos += 4;
+  pos += layerNameLen; // layer name bytes
+  pos += 4; // priority i32
+
+  const pathCount = dv.getUint32(pos, true); pos += 4;
+  const paths: string[] = [];
+  for (let i = 0; i < pathCount; i++) {
+    let end = pos; while (buf[end] !== 0) end++;
+    paths.push(new TextDecoder().decode(buf.slice(pos, end)));
+    pos = end + 1;
+  }
+
+  const wadCount = dv.getUint32(pos, true); pos += 4;
+  const wads: string[] = [];
+  for (let i = 0; i < wadCount; i++) {
+    let end = pos; while (buf[end] !== 0) end++;
+    wads.push(new TextDecoder().decode(buf.slice(pos, end)));
+    pos = end + 1;
+  }
+
+  // pad to 8-byte alignment (same as builder)
+  pos += (8 - (pos % 8)) % 8;
+
+  // descriptors: 61 bytes each
+  const descs: { offset: number; compressed: boolean; compressedSize: number; rawSize: number; fileIndex: number; wadIndex: number }[] = [];
+  for (let i = 0; i < fileCount; i++) {
+    pos += 8; // path hash
+    const offset = Number(dv.getBigUint64(pos, true)); pos += 8;
+    const compressed = buf[pos] === 1; pos += 1;
+    const compressedSize = Number(dv.getBigUint64(pos, true)); pos += 8;
+    const rawSize = Number(dv.getBigUint64(pos, true)); pos += 8;
+    pos += 8; // compressed hash
+    pos += 8; // raw hash
+    const fileIndex = dv.getUint32(pos, true); pos += 4;
+    pos += 4; // layer index
+    const wadIndex = dv.getUint32(pos, true); pos += 4;
+    descs.push({ offset, compressed, compressedSize, rawSize, fileIndex, wadIndex });
+  }
+
+  const result = new Map<string, Uint8Array>();
+    let meta: Record<string, unknown> | null = null;
+
+    for (const desc of descs) {
+      const chunk = buf.slice(desc.offset, desc.offset + desc.compressedSize);
+      const data: Uint8Array = desc.compressed ? zstdDecompress(chunk) : chunk;
+
+      const filePath = paths[desc.fileIndex];
+      if (filePath === "_meta_/info.msgpack") {
+        try { meta = msgpackDecode(data) as Record<string, unknown>; } catch { /* ignore */ }
+        continue;
+      }
+      const wadName = desc.wadIndex < wads.length ? wads[desc.wadIndex] : null;
+      const fullPath = wadName ? `WAD/${wadName}/${filePath}` : filePath;
+      result.set(fullPath, data);
+    }
+
+    return { paths, wads, files: result, meta };
+}
+
+async function inspectModpkg(file: File): Promise<ImportReport> {
+  const kind: WadKind = "modpkg";
+  const { files, meta } = await readModpkgRaw(file);
+  const entries: WadEntry[] = [];
+  const scores = new Map<string, number>();
+  const skinNumbers = new Set<number>();
+
+  for (const [fullPath] of files) {
+    const path = fullPath.replace(/^WAD\/[^/]+\//i, "");
+    const ext = extensionOf(path);
+    entries.push({ path, hash: fnv1a(path), size: 0, extension: ext });
+    tally(scores, path.match(WAD_RE)?.[1], 5);
+    const cm = path.match(CHAR_RE); if (cm) { tally(scores, cm[1], 3); skinNumbers.add(Number(cm[2])); }
+    const bm = path.match(BIN_RE); if (bm) { tally(scores, bm[1], 4); skinNumbers.add(Number(bm[2])); }
+  }
+
+  tally(scores, characterFromName(file.name) ?? undefined, 2);
+  if (meta) {
+    const named = (meta.name ?? meta.display_name) as string | undefined;
+    if (named) tally(scores, named, 6);
+  }
+
+  const character = [...scores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const bins = entries.filter(e => e.extension === "bin").map(e => e.path);
+  const title = (meta?.name as string | undefined)?.trim() || file.name.replace(/\.modpkg$/i, "");
+  const author = (meta?.authors as Array<{ name: string }> | undefined)?.[0]?.name ?? "";
+  const version = semver((meta?.version as string | undefined) ?? "0.0.0");
+  const description = (meta?.description as string | undefined) ?? "";
+
+  return {
+    name: file.name, kind, bytes: file.size, character,
+    skinNumbers: [...skinNumbers].sort((a, b) => a - b),
+    entries, bins, hashTables: [],
+    hasMeta: true, hasWad: [...files.keys()].some(p => /WAD\//i.test(p)),
+    title, author, version, description,
+  };
+}
+
+// ---- Build ModSource from zip or modpkg file ----
 async function buildModSource(file: File): Promise<ModSource> {
   const mod = new ModSource();
   const buf = new Uint8Array(await file.arrayBuffer());
+
+  // .modpkg: read extracted files and add as loose
+  if (kindOf(file.name) === "modpkg") {
+    const { files } = await readModpkgRaw(file);
+    const byWad = new Map<string, Map<string, Uint8Array>>();
+    for (const [fullPath, data] of files) {
+      const m = /^WAD\/([^/]+)\/(.+)$/i.exec(fullPath);
+      if (!m) continue;
+      const [, wadName, inner] = m;
+      if (!byWad.has(wadName)) byWad.set(wadName, new Map());
+      byWad.get(wadName)!.set(inner, data);
+    }
+    for (const [wadName, filesMap] of [...byWad].reverse()) mod.addLoose(wadName, filesMap);
+    return mod;
+  }
+
   if (/\.wad(\.client)?$/i.test(file.name)) {
     await mod.addWad(file.name, buf);
   } else {
@@ -137,13 +278,13 @@ async function buildModSource(file: File): Promise<ModSource> {
     const wadFiles: [string, Uint8Array][] = [];
     const loose = new Map<string, Map<string, Uint8Array>>();
     for (const [name, data] of Object.entries(z)) {
-      const m = /^WAD\/([^/]+?\.wad(?:\.client)?)(?:\/(.+))?$/i.exec(name);
+      const m = /^WAD\/([^/]+?\\.wad(?:\.client)?)(?:\/(.+))?$/i.exec(name);
       if (!m || (!data.length && name.endsWith("/"))) continue;
       if (m[2]) { if (!loose.has(m[1])) loose.set(m[1], new Map()); loose.get(m[1])!.set(m[2], data); }
       else wadFiles.push([m[1], data]);
     }
     for (const [n, d] of wadFiles.reverse()) await mod.addWad(n, d);
-    for (const [n, files] of [...loose].reverse()) mod.addLoose(n, files);
+    for (const [n, filesMap] of [...loose].reverse()) mod.addLoose(n, filesMap);
   }
   return mod;
 }
@@ -245,8 +386,11 @@ export async function fixSkin(
     return legacyFixSkin(file, report, options, onLog);
   }
 
-  const outputName = file.name.replace(/\.(zip|wad|client)$/i, ".fantome").replace(/\.fantome$/i, "_fixed.fantome");
-  const files: { path: string; data: Uint8Array }[] = [];
+  const outputName = file.name
+      .replace(/\.(zip|wad|client)$/i, ".fantome")
+      .replace(/\.fantome$/i, "_fixed.fantome")
+      .replace(/\.modpkg$/i, "_fixed.modpkg");
+    const files: { path: string; data: Uint8Array }[] = [];
 
   for (const [path, data] of fixResult.files) {
     files.push({ path, data });
@@ -316,8 +460,11 @@ async function legacyFixSkin(
     }
   }
   if (!report.bins.length) { missing.push("skins.bin"); onLog({ tone: "err", text: "[BIN] skins.bin was not inside the import" }); }
-  const outputName = file.name.replace(/\.(zip|wad|client)$/i, ".fantome").replace(/\.fantome$/i, "_fixed.fantome");
-  const index = [...new Set(files.map(item => item.path).filter(p => !p.toUpperCase().startsWith("META/")))];
+  const outputName = file.name
+      .replace(/\.(zip|wad|client)$/i, ".fantome")
+      .replace(/\.fantome$/i, "_fixed.fantome")
+      .replace(/\.modpkg$/i, "_fixed.modpkg");
+    const index = [...new Set(files.map(item => item.path).filter(p => !p.toUpperCase().startsWith("META/")))];
   files.push({ path: "META/hashes.game.txt", data: new TextEncoder().encode(`${index.join("\n")}\n`) });
   onLog({ tone: "good", text: `[HASH] indexed ${index.length} game file(s)` });
   onLog({ tone: "good", text: `[OUT] ${outputName} · ${report.title} · ${kept} kept · ${dropped} dropped` });

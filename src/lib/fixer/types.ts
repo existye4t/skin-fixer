@@ -1,4 +1,4 @@
-export type WadKind = "archive" | "folder" | "fantome" | "zip";
+export type WadKind = "archive" | "folder" | "fantome" | "zip" | "modpkg";
 
 export type WadEntry = {
   path: string;
