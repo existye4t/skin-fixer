@@ -411,27 +411,42 @@ export async function fixSkin(
     if (kindOf(file.name) === "modpkg") {
       blob = await buildModpkg(report, `${character}.wad.client`, files);
     } else {
-      // Build a fantome zip: WAD/<character>.wad.client contains the WAD binary
-      const wadFiles: { hash: bigint; data: Uint8Array }[] = [];
-      const metaFiles: { path: string; data: Uint8Array }[] = [];
-      for (const f of files) {
-        if (f.path.toUpperCase().startsWith("META/")) {
-          metaFiles.push(f);
-        } else {
-          wadFiles.push({ hash: hashPath(f.path), data: f.data });
+        // Build a fantome zip: WAD/<character>.wad.client contains the WAD binary
+        // Matches cslol-go output format exactly
+        const wadFiles: { hash: bigint; data: Uint8Array }[] = [];
+        const metaFiles: { path: string; data: Uint8Array }[] = [];
+        for (const f of files) {
+          if (f.path.toUpperCase().startsWith("META/")) {
+            metaFiles.push(f);
+          } else {
+            wadFiles.push({ hash: hashPath(f.path), data: f.data });
+          }
         }
+        const wadBin = buildWad(wadFiles);
+        const zipEntries: Record<string, Uint8Array> = {};
+        zipEntries[`WAD/${character}.wad.client`] = wadBin;
+
+        // Pass through original META/info.json — preserve all original fields
+        // Only add missing META files (hashes etc), never overwrite info.json
+        const hasInfoJson = metaFiles.some(m => /meta\/info\.json$/i.test(m.path));
+        if (!hasInfoJson) {
+          // Read original info.json from input if present
+          let infoData: Uint8Array | null = null;
+          try {
+            const origZip = await JSZip.loadAsync(file);
+            const origInfo = origZip.file(/meta\/info\.json$/i)[0];
+            if (origInfo) infoData = await origInfo.async("uint8array");
+          } catch { /* ignore */ }
+          if (!infoData) {
+            const info = { Name: report.title || outputName.replace(/_fixed\.fantome$/, ""), Author: report.author || "Exist", Version: report.version || "1.0", Description: report.description || "" };
+            infoData = new TextEncoder().encode(JSON.stringify(info, null, 2));
+          }
+          zipEntries["META/info.json"] = infoData;
+        }
+        for (const m of metaFiles) zipEntries[m.path] = m.data;
+
+        blob = new Blob([zipSync(zipEntries, { level: 0 })], { type: "application/octet-stream" });
       }
-      const wadBin = buildWad(wadFiles);
-      const zipEntries: Record<string, Uint8Array> = {};
-      zipEntries[`WAD/${character}.wad.client`] = wadBin;
-      for (const m of metaFiles) zipEntries[m.path] = m.data;
-      // Add META/info.json
-      if (!metaFiles.some(m => /meta\/info\.json$/i.test(m.path))) {
-        const info = { Name: report.title || outputName.replace(/_fixed\.fantome$/, ""), Author: report.author || "", Version: report.version || "0.0.0" };
-        zipEntries["META/info.json"] = new TextEncoder().encode(JSON.stringify(info));
-      }
-      blob = new Blob([zipSync(zipEntries, { level: 0 })], { type: "application/octet-stream" });
-    }
   return {
     blob,
     result: { character, skinNo, scanned: report.entries.length, bins: report.bins.length, repaths, kept, dropped: 0, missing, outputName },
