@@ -15,7 +15,7 @@ function Stage({ children }: { children: ReactNode }) {
   const { reduced } = useMotionSetting();
   return (
     <motion.div
-      className="min-h-screen"
+      className="min-h-dvh"
       initial={reduced ? false : { opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduced ? { opacity: 1 } : { opacity: 0, y: -12 }}

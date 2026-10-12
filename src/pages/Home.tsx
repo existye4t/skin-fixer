@@ -18,6 +18,9 @@ import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 const ease = [0.22, 1, 0.36, 1] as const;
+// Max upward shift of the topo layer. The layer is this much taller than the
+// viewport so the parallax translate never uncovers the bottom of the screen.
+const PARALLAX_SHIFT = 340;
 
 export function Home() {
   const { theme } = useTheme();
@@ -27,7 +30,7 @@ export function Home() {
 
   // Subtle parallax on TopoField: moves at ~28% of scroll speed
   const { scrollY } = useScroll();
-  const rawParallax = useTransform(scrollY, [0, 1200], [0, -340]);
+  const rawParallax = useTransform(scrollY, [0, 1200], [0, -PARALLAX_SHIFT]);
   const parallaxY = useSpring(rawParallax, { stiffness: 60, damping: 20 });
   const steps = [
     ["01", t.step1t, t.step1b],
@@ -36,10 +39,13 @@ export function Home() {
   ];
 
   return (
-    <div className={cn("relative min-h-screen overflow-hidden", dark ? "text-white" : "text-[#12141a]")}>
+    <div className={cn("relative min-h-dvh overflow-hidden", dark ? "text-white" : "text-[#12141a]")}>
       <motion.div
-        className="pointer-events-none fixed inset-0"
-        style={reduced ? {} : { y: parallaxY }}
+        className="pointer-events-none fixed inset-x-0 top-0"
+        style={{
+          height: `calc(100dvh + ${PARALLAX_SHIFT}px)`,
+          ...(reduced ? {} : { y: parallaxY }),
+        }}
       >
         <TopoField mode={theme} className="absolute inset-0" density={0.9} />
       </motion.div>
@@ -51,7 +57,7 @@ export function Home() {
             : "bg-[radial-gradient(circle_at_center,transparent_0%,#eef1f6_78%)]",
         )}
       />
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-6">
+      <div className="relative z-10 mx-auto flex min-h-dvh max-w-6xl flex-col px-6">
         <header className="flex items-center justify-between py-6">
           <span className="text-sm tracking-tight">{t.brand}</span>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -286,7 +292,7 @@ function About() {
   const dark = useTheme().theme === "dark";
 
   return (
-    <section className="relative z-10 mx-auto max-w-3xl px-6 py-28">
+    <section className="relative z-10 mx-auto max-w-3xl px-6 pt-28 pb-12">
       <motion.div
         initial={reduced ? false : "hidden"}
         whileInView="visible"
