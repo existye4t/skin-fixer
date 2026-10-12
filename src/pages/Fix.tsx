@@ -195,7 +195,7 @@ export function Fix() {
   const gameStatusColor = gameState.status === "ready" ? "text-emerald-500" : gameState.status === "error" ? "text-red-500" : gameState.status === "loading" ? "text-sky-500" : "text-neutral-500";
 
   return (
-    <div className={cn("relative", dark ? "text-white" : "text-[#12141a]")}>
+    <div className={cn("relative min-h-screen", dark ? "bg-[#09090b] text-white" : "bg-paper text-[#12141a]")}>
       <TopoField mode={theme} className="pointer-events-none fixed inset-0 opacity-60" density={0.7} />
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-6">
         <header className="mb-8 flex items-center justify-between gap-3">
