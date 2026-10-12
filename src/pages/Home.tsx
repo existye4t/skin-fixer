@@ -286,7 +286,7 @@ function About() {
   const dark = useTheme().theme === "dark";
 
   return (
-    <section className="relative z-10 mx-auto min-h-[80vh] max-w-3xl px-6 py-28">
+    <section className="relative z-10 mx-auto max-w-3xl px-6 py-28">
       <motion.div
         initial={reduced ? false : "hidden"}
         whileInView="visible"
