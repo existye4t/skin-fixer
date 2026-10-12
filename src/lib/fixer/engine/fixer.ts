@@ -401,7 +401,7 @@ export class Fixer {
     if (!this._repathSet) { this.s.repath_path_path = s.prefix || `@${char.slice(0, 4)}${skinNo}`; this._repathSet = true; this.pf.s = this.s; }
     const ld = await this.loadAllBins(binPath, char, skinNo, job.hp, queue);
     if (!ld) return false;
-    const { entries, concat, staticMat, targets, linked, keptLinked, refs } = ld;
+    const { entries, concat, staticMat, targets, linked, keptLinked, missingLinked, refs } = ld;
     if (s.apply1617 && !s.convertBeforeCollect) {
       const tracker = new ConvertedStringsTracker();
       for (const m of [entries, concat, staticMat]) this.conv.convertBinMap(m, tracker);
@@ -416,7 +416,7 @@ export class Fixer {
     this.put(this.out, concatPath, writeBin(makeBin([], concat)));
     linked.push(concatPath);
     if (staticMat.items.length && !s.killStaticMat) { this.put(this.out, smPath, writeBin(makeBin([], staticMat))); linked.push(smPath); }
-    const linkedStrings = [...keptLinked, ...linked];
+    const linkedStrings = [...keptLinked, ...missingLinked, ...linked];
     this.put(this.out, binPath, writeBin(makeBin(linkedStrings, entries)));
     this.log(`[OK] ${binPath}`, "good");
     if (s.noskinni && skinNo === 0 && this.game?.ready && refs.skinKey) {
