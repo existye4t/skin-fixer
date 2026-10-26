@@ -14,13 +14,14 @@
 - Glow hover on the main actions and the About profile.
 - README, MIT license, Pages workflow.
 - `scripts/check.mts` covers detection and metadata.
+- Engine switch on the fix page: cslol controls or Celestial Quick Fix / full repair. Celestial options match the 2.4.2 Mac binary's `QuickRepairOptions`.
 
 ## Not done
 
 - Raw `.wad.client` binaries. JSZip cannot open them.
 - Pulling missing base assets from a League install.
-- Shader hash tables and patch manifests from `cslol-tools`.
 - A live size comparison against a desktop export of the user's own skin.
+- Downloading an old-patch manifest. The browser cannot run `ManifestDownloader.exe`, so the manifest control only selects the version and the log says the game folder is used instead.
 
 ## Known constraints
 

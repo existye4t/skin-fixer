@@ -24,25 +24,57 @@ export type ImportReport = {
   description: string;
 };
 
+export type TriState = "auto" | "include" | "exclude";
+
+export type ManifestChoice = {
+  version: string;
+  link: string;
+};
+
+/** Which desktop fixer the page is matching. */
+export type FixerEngine = "cslol" | "celestial";
+
+/** Celestial Quick Fix / import-repair toggles. Names follow QuickRepairOptions. */
+export type CelestialOptions = {
+  /** quick vs the full deep-repair step list. */
+  mode: "quick" | "full";
+  stripMipmaps: boolean;
+  fixTexDimensions: boolean;
+  nukeMaterials: boolean;
+  nukeGearSkinData: boolean;
+  restoreSco: boolean;
+  fixHpBar: boolean;
+  textures: boolean;
+  voiceover: boolean;
+  gearSkin: boolean;
+  missingVfx: boolean;
+};
+
+/** Topaz Mod Fixer controls. Names follow FixerMenu.xaml. */
 export type FixerOptions = {
+  engine: FixerEngine;
+  character: string;
   skinNo: number;
   allAvailable: boolean;
   binless: boolean;
+  smallMod: boolean;
   noSkin: boolean;
+  sound: TriState;
+  animation: TriState;
+  repathInFile: boolean;
   keepSfx: boolean;
-  killStatic: boolean;
   keepIcons: boolean;
   keepUi: boolean;
-  smallMod: boolean;
-  sound: "auto" | "include" | "exclude";
-  animation: "auto" | "include" | "exclude";
+  keepBonus: boolean;
+  killStatic: boolean;
   affix: string;
-  repathInFile: boolean;
-  // Full engine options (skin-fixer-web)
-  apply1617: boolean;
-  convertBeforeCollect: boolean;
+  manifest: boolean;
+  manifestVersion: string;
   useGameIndex: boolean;
+  celestial: CelestialOptions;
 };
+
+export const TRISTATE: Record<TriState, number> = { auto: 0, include: 1, exclude: 2 };
 
 /** State for the optional game folder (DATA/FINAL directory) */
 export type GameIndexState = {
@@ -70,21 +102,39 @@ export type FixReport = {
   outputName: string;
 };
 
+export const DEFAULT_CELESTIAL: CelestialOptions = {
+  mode: "quick",
+  stripMipmaps: true,
+  fixTexDimensions: true,
+  nukeMaterials: false,
+  nukeGearSkinData: true,
+  restoreSco: true,
+  fixHpBar: true,
+  textures: true,
+  voiceover: true,
+  gearSkin: true,
+  missingVfx: true,
+};
+
 export const DEFAULT_OPTIONS: FixerOptions = {
+  engine: "cslol",
+  character: "",
   skinNo: 0,
   allAvailable: true,
   binless: false,
-  noSkin: true,
-  keepSfx: false,
-  killStatic: false,
-  keepIcons: true,
-  keepUi: true,
   smallMod: true,
+  noSkin: true,
   sound: "auto",
   animation: "auto",
-  affix: "",
   repathInFile: true,
-  apply1617: true,
-  convertBeforeCollect: true,
+  keepSfx: false,
+  keepIcons: true,
+  keepUi: true,
+  keepBonus: true,
+  killStatic: false,
+  affix: "",
+  manifest: false,
+  manifestVersion: "",
   useGameIndex: false,
+  celestial: DEFAULT_CELESTIAL,
 };

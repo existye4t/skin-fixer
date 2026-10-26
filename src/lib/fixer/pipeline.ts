@@ -4,11 +4,12 @@ import { decompress as zstdDecompress } from "fzstd";
 import { decode as msgpackDecode } from "@msgpack/msgpack";
 
 import { buildModpkg } from "./modpkg";
-import type { FixerOptions, FixReport, ImportReport, LogLine, WadEntry, WadKind } from "./types";
+import type { FixerOptions, FixReport, ImportReport, LogLine, ManifestChoice, WadEntry, WadKind } from "./types";
+import { TRISTATE } from "./types";
 import { ModSource, buildWad } from "./engine/wad";
 import { GameIndex, filesFromDirHandle, filesFromFileList } from "./engine/game";
 import { NameDB } from "./engine/names";
-import { hashPath } from "./engine/hash";
+import { fnv1a as fnv32, hashPath } from "./engine/hash";
 import { Fixer } from "./engine/fixer";
 
 const FNV_OFFSET = 0x811c9dc5;
@@ -109,6 +110,53 @@ const NAME_URLS = [
   "https://raw.githubusercontent.com/CommunityDragon/Data/master/hashes/lol/hashes.game.txt.0",
   "https://raw.githubusercontent.com/CommunityDragon/Data/master/hashes/lol/hashes.game.txt.1",
 ];
+const MANIFEST_URL = "https://raw.githubusercontent.com/Aurecueil/Cs-lol-go/main/Tools/manifests.json";
+const SHADER_URLS = [
+  "https://raw.githubusercontent.com/CommunityDragon/Data/master/hashes/lol/hashes.game.txt",
+];
+let _shaders: { hash: number; path: string }[] = [];
+let _manifests: ManifestChoice[] = [];
+
+export function getManifests() { return _manifests; }
+
+/** CommunityDragon lists shader paths as 16-hex XXH64 lines. Bin links use FNV1a of that path. */
+function parseShaderLines(text: string) {
+  const out: { hash: number; path: string }[] = [];
+  const seen = new Set<number>();
+  for (const line of text.split(/\r?\n/)) {
+    const sp = line.indexOf(" ");
+    if (sp < 16) continue;
+    const path = line.slice(sp + 1).trim();
+    if (!/shaders?\//i.test(path)) continue;
+    const hash = fnv32(path);
+    if (seen.has(hash)) continue;
+    seen.add(hash);
+    out.push({ hash, path });
+  }
+  return out;
+}
+
+export async function loadManifests(): Promise<ManifestChoice[]> {
+  if (_manifests.length) return _manifests;
+  const res = await fetch(MANIFEST_URL);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const rows = await res.json() as { version?: string; link?: string }[];
+  _manifests = rows.filter(r => r.version && r.link).map(r => ({ version: r.version!, link: r.link! }));
+  return _manifests;
+}
+
+export async function loadShaderHashes(): Promise<number> {
+  if (_shaders.length) return _shaders.length;
+  const cache = await caches.open("skinfixer-names-v1");
+  const chunks: string[] = [];
+  for (const url of SHADER_URLS) {
+    let res = await cache.match(url);
+    if (!res) { res = await fetch(url); if (!res.ok) continue; await cache.put(url, res.clone()); }
+    chunks.push(await res.text());
+  }
+  _shaders = parseShaderLines(chunks.join("\n"));
+  return _shaders.length;
+}
 export async function isNamesCached(): Promise<boolean> {
   try {
     const cache = await caches.open("skinfixer-names-v1");
@@ -329,13 +377,23 @@ function repathAsset(path: string, prefix: string) {
 
 import { binFailure, retargetBin } from "./bin";
 
+const BONUS_WAD = /(?:^|\/)(common|map11)\.wad(?:\.client)?$/i;
+const UI_WAD = /(?:^|\/)ui\.wad(?:\.client)?$/i;
+
+function passThroughWads(report: ImportReport, options: FixerOptions) {
+  const keep = new Set<string>();
+  if (options.keepUi) for (const e of report.entries) if (UI_WAD.test(e.path)) keep.add(e.path);
+  if (options.keepBonus) for (const e of report.entries) if (BONUS_WAD.test(e.path)) keep.add(e.path);
+  return keep;
+}
+
 export async function fixSkin(
   file: File,
   report: ImportReport,
   options: FixerOptions,
   onLog: (line: Omit<LogLine, "id">) => void,
 ): Promise<{ blob: Blob; result: FixReport }> {
-  const character = report.character ?? "champion";
+  const character = (options.character || report.character || "champion").toLowerCase();
   const skinNo = options.allAvailable ? (report.skinNumbers[0] ?? options.skinNo) : options.skinNo;
 
   onLog({ tone: "act", text: `[SCAN] ${report.entries.length} entries in ${report.name}` });
@@ -356,29 +414,51 @@ export async function fixSkin(
     return legacyFixSkin(file, report, options, onLog);
   }
 
-  const fixer = new Fixer(
-    { mod, game, names: _names, log: (msg, kind) => onLog({ tone: (kind as LogLine["tone"]) ?? "act", text: msg }) },
-    {
-      character,
-      skinNo,
-      allSkins: options.allAvailable,
-      prefix: options.affix,
-      apply1617: options.apply1617,
-      convertBeforeCollect: options.convertBeforeCollect,
-      binless: options.binless,
-      smallMod: options.smallMod,
-      noskinni: options.noSkin,
-      killStaticMat: options.killStatic,
-      keepIcons: options.keepIcons,
-      in_file_path: options.repathInFile,
-      cls_assets: true,
-      sfxEvents: options.keepSfx,
-      verifyHpBar: true,
-      healthbarStyle: 12,
-    }
-  );
+  if (options.manifest) {
+    const picked = _manifests.find(m => m.version === options.manifestVersion) ?? _manifests[0];
+    onLog({
+      tone: "warn",
+      text: picked
+        ? `[MANIFEST] ${picked.version} is listed, but a browser cannot run ManifestDownloader.exe. Missing files are filled from the selected game folder only.`
+        : "[MANIFEST] no manifest list loaded",
+    });
+  }
+  let shaders = _shaders;
+  if (!shaders.length) { try { await loadShaderHashes(); shaders = _shaders; } catch { shaders = []; } }
+  if (shaders.length) onLog({ tone: "act", text: `[SHADER] ${shaders.length} shader names` });
 
-  let fixResult;
+const celestial = options.engine === "celestial";
+    if (celestial) {
+      onLog({ tone: "head", text: `[CELESTIAL] ${options.celestial.mode === "full" ? "full repair" : "quick fix"}` });
+      if (!game?.ready) onLog({ tone: "warn", text: "[CELESTIAL] no game folder — texture, SCO, gear and voice pulls stay in the mod" });
+    }
+    const fixer = new Fixer(
+      { mod, game, names: _names, log: (msg, kind) => onLog({ tone: (kind as LogLine["tone"]) ?? "act", text: msg }) },
+      {
+        character,
+        skinNo,
+        allSkins: options.allAvailable,
+        prefix: options.affix,
+        apply1617: true,
+        convertBeforeCollect: true,
+        binless: options.binless,
+        smallMod: options.smallMod,
+        noskinni: options.noSkin && !options.binless && !options.allAvailable,
+        killStaticMat: celestial ? options.celestial.nukeMaterials : options.killStatic,
+        keepIcons: options.keepIcons,
+        in_file_path: options.repathInFile,
+        cls_assets: true,
+        sfxEvents: options.keepSfx,
+        verifyHpBar: celestial ? options.celestial.fixHpBar : true,
+        healthbarStyle: 12,
+        soundOption: celestial && options.celestial.voiceover ? 1 : TRISTATE[options.sound],
+        animOption: TRISTATE[options.animation],
+        shaders,
+        celestial: celestial ? { ...options.celestial, full: options.celestial.mode === "full" } : undefined,
+      }
+    );
+
+    let fixResult;
   try {
     fixResult = await fixer.run();
   } catch (e) {
@@ -391,13 +471,21 @@ export async function fixSkin(
         .replace(/\.(zip|wad|client)$/i, ".fantome")
         .replace(/\.fantome$/i, "_fixed.fantome")
         .replace(/\.modpkg$/i, "_fixed.modpkg");
-      const files: { path: string; data: Uint8Array }[] = [];
+  const files: { path: string; data: Uint8Array }[] = [];
+  const passthrough = passThroughWads(report, options);
 
-    for (const [path, data] of fixResult.files) {
-        files.push({ path, data });
-      }
+  for (const [path, data] of fixResult.files) {
+    files.push({ path, data });
+  }
+  if (passthrough.size) {
+    const zip = await JSZip.loadAsync(file);
+    for (const path of passthrough) {
+      const data = await zip.file(path)?.async("uint8array");
+      if (data) { files.push({ path, data }); onLog({ tone: "good", text: `[KEEP] ${path}` }); }
+    }
+  }
 
-      const missing = fixResult.missing;
+  const missing = fixResult.missing;
       const kept = files.length;
       const repaths = fixResult.hashTable.length;
 

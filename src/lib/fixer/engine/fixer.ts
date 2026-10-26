@@ -17,12 +17,35 @@ export type FixerSettings = {
   verifyHpBar: boolean; in_file_path: boolean; cls_assets: boolean; keepIcons: boolean;
   killStaticMat: boolean; binless: boolean; smallMod: boolean; sfxEvents: boolean;
   noskinni: boolean; repath_path_path?: string;
+  /** 0 auto, 1 include, 2 exclude — matches FixerSettings.SoundOption / AnimOption. */
+  soundOption: number;
+  animOption: number;
+  /** Shader hash -> path, from hashes.shaders.txt. Empty skips the shader rewrite. */
+  shaders: ShaderEntry[];
+  /** Celestial QuickRepairOptions. Default off so the cslol pass is unchanged. */
+  celestial?: {
+    stripMipmaps: boolean;
+    fixTexDimensions: boolean;
+    nukeMaterials: boolean;
+    nukeGearSkinData: boolean;
+    restoreSco: boolean;
+    fixHpBar: boolean;
+    textures: boolean;
+    voiceover: boolean;
+    gearSkin: boolean;
+    missingVfx: boolean;
+    full: boolean;
+  };
 };
+export type ShaderEntry = { hash: number; path: string };
 export const FIXER_DEFAULTS: FixerSettings = {
   character: "", skinNo: 0, allSkins: false, prefix: "", apply1617: true, convertBeforeCollect: true,
   healthbarStyle: 12, verifyHpBar: true, in_file_path: true, cls_assets: true, keepIcons: true,
   killStaticMat: false, binless: false, smallMod: true, sfxEvents: false, noskinni: true,
+  soundOption: 0, animOption: 0, shaders: [],
 };
+/** Wwise bank version Topaz compares against (FixerSettings.bnk_version). */
+const BNK_VERSION = 145;
 const lc = (s: string) => s.toLowerCase();
 const extOf = (s: string) => { const f = s.slice(s.lastIndexOf("/") + 1); const i = f.lastIndexOf("."); return i >= 0 && i < f.length - 1 ? f.slice(i) : ""; };
 const splitN = (s: string, sep: string, n: number) => {
@@ -135,12 +158,56 @@ export class Fixer {
   out = new Map<string, Uint8Array>(); outNames = new Map<string, string>(); input = new Map<string, Uint8Array>();
   pf: PathFixer; conv: BinConverter; hashTable: string[] = []; missing: string[] = []; missingLinked: string[] = [];
   private _repathSet = false;
+  private shaderByHash = new Map<number, ShaderEntry>();
+  private shaderByGroup = new Map<string, { name: string; entry: ShaderEntry }[]>();
   constructor(ctx: { mod: ModSource; game: GameIndex | null; names: NameDB; log: LogFn }, settings: Partial<FixerSettings>) {
     this.mod = ctx.mod; this.game = ctx.game; this.names = ctx.names; this.logfn = ctx.log || (() => {});
     this.s = { ...FIXER_DEFAULTS, ...settings, repath_path_path: settings.repath_path_path ?? "" } as FixerSettings & { repath_path_path: string };
     this.pf = new PathFixer({ cls_assets: this.s.cls_assets, in_file_path: this.s.in_file_path, repath_path_path: this.s.repath_path_path });
     if (this.mod.looseNames?.length) this.names.addTemporary(this.mod.looseNames);
     this.conv = new BinConverter(); this.conv.loadRules(RULES);
+    this.indexShaders();
+  }
+  /** Port of FetchShaders path index. Existence is unknown without shaders.bin, so every named shader is a candidate. */
+  private indexShaders() {
+    for (const entry of this.s.shaders) {
+      if (!this.shaderByHash.has(entry.hash)) this.shaderByHash.set(entry.hash >>> 0, entry);
+    }
+    for (const entry of this.shaderByHash.values()) {
+      const parts = entry.path.split("/");
+      if (parts.length < 3) continue;
+      const list = this.shaderByGroup.get(parts[1]) ?? [];
+      list.push({ name: parts[parts.length - 1], entry });
+      this.shaderByGroup.set(parts[1], list);
+    }
+  }
+  /** Port of GetShaderOrFallback + FindFallbackHash. */
+  shaderFallback(targetHash: number): { hash: number; oldName: string; newName: string } {
+    const original = this.shaderByHash.get(targetHash >>> 0);
+    if (!original) return { hash: targetHash, oldName: "", newName: "" };
+    const parts = original.path.split("/");
+    if (parts.length < 3) return { hash: original.hash, oldName: original.path, newName: "" };
+    const candidates = this.shaderByGroup.get(parts[1]);
+    if (!candidates) return { hash: original.hash, oldName: original.path, newName: "" };
+    const tokens = new Set(parts[parts.length - 1].split("_"));
+    if (tokens.delete("MultiLayered")) tokens.add("MultiLayer");
+    if (tokens.delete("Addative")) tokens.add("Additive");
+    let best: ShaderEntry | null = null; let bestMutual = -1; let bestNon = Infinity;
+    for (const cand of candidates) {
+      if (cand.entry.hash === original.hash) continue;
+      const candTokens = cand.name.split("_");
+      let mutual = 0; let non = 0;
+      for (const token of candTokens) { if (tokens.has(token)) mutual++; else non++; }
+      if (!mutual) continue;
+      if (mutual > bestMutual || (mutual === bestMutual && non < bestNon)) { bestMutual = mutual; bestNon = non; best = cand.entry; }
+    }
+    return best ? { hash: best.hash, oldName: original.path, newName: best.path } : { hash: original.hash, oldName: original.path, newName: "" };
+  }
+  /** BKHD version at +8 and language id at +16. Port of CheckLanguageID's header read. */
+  private bnkHeader(data: Uint8Array): { version: number; id: number } | null {
+    if (data.length < 20) return null;
+    const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    return { version: dv.getUint32(8, true), id: dv.getUint32(16, true) };
   }
   log(m: string, k = "info") { this.logfn(m, k); }
   put(map: Map<string, Uint8Array>, path: string, data: Uint8Array) { const k = lc(path); this.outNames.set(k, path); map.set(k, data); }
@@ -221,30 +288,100 @@ export class Fixer {
     }
     return remaining;
   }
+  /** Port of Repatheruwu.process: sound/animation options, VO bank version, then asset lookup. */
   async process(targets: Target[]) {
-    const s = this.s; let processing = targets; const toCheckup: Target[] = []; const missingFinal: Target[] = [];
+    const s = this.s; let processing = targets.slice(); const toCheckup: Target[] = []; const missingFinal: Target[] = [];
     const take = (pred: (t: Target) => boolean) => { const a = processing.filter(pred); processing = processing.filter(t => !pred(t)); return a; };
-    if (!s.sfxEvents) toCheckup.push(...take(t => lc(t.original).endsWith("_sfx_events.bnk")));
+    const isSound = (t: Target) => /\.(wpk|bnk)$/i.test(t.original);
+    const isAnm = (t: Target) => /\.anm$/i.test(t.original);
+    const isSfx = (t: Target) => lc(t.original).endsWith("_sfx_events.bnk");
+    const isVo = (t: Target) => lc(t.original).includes("_vo_events.bnk");
+    const allPaths = new Set(processing.map(t => lc(t.original)));
+    const staleVo: Target[] = [];
+
+    if (s.soundOption === 0) {
+      for (const target of processing.filter(isVo)) {
+        const data = await this.readFrom(this.mod, hashPath(target.original));
+        const head = data ? this.bnkHeader(data) : null;
+        if (!head || head.version === 0) { processing = processing.filter(t => t !== target); continue; }
+        if (head.version < BNK_VERSION) {
+          staleVo.push(target);
+          this.log(`[VO] ${target.original} bank ${head.version} < ${BNK_VERSION}`, "warn");
+          processing = processing.filter(t => t !== target);
+          const partner = target.original.replace(/_vo_events\.bnk/i, "_vo_audio.wpk");
+          if (allPaths.has(lc(partner))) this.log(`[VO] paired ${partner}`, "mod");
+        } else if (head.version > BNK_VERSION) {
+          this.log(`[VO] ${target.original} bank ${head.version} is newer than ${BNK_VERSION}`, "good");
+        }
+      }
+      if (!s.sfxEvents) toCheckup.push(...take(isSfx));
+    } else if (s.soundOption === 2) {
+      toCheckup.push(...take(isSound));
+    } else {
+      for (const target of processing.filter(isVo)) {
+        const data = await this.readFrom(this.mod, hashPath(target.original));
+        const head = data ? this.bnkHeader(data) : null;
+        if (head && head.version < BNK_VERSION) this.log(`[VO] ${target.original} bank ${head.version} < ${BNK_VERSION}`, "warn");
+      }
+    }
+    if (s.animOption === 2) toCheckup.push(...take(isAnm));
+
+    processing = await this.extractAndSwap(this.mod, processing, "MOD");
+    if (!processing.length) return this.finishProcess(toCheckup, missingFinal, staleVo);
+
     if (!s.binless) {
-      processing = await this.extractAndSwap(this.mod, processing, "MOD");
-      toCheckup.push(...take(t => /\.(wpk|bnk|anm)$/i.test(t.original)));
+      if (s.soundOption === 0) toCheckup.push(...take(isSound));
+      if (s.animOption === 0) toCheckup.push(...take(isAnm));
       if (s.smallMod) processing = await this.findAndSwap(this.game, processing, "GAME");
       else processing = await this.extractAndSwap(this.game, processing, "GAME-COPY");
-    } else processing = await this.extractAndSwap(this.mod, processing, "MOD");
-    if (processing.length) {
-      this.names.findMatches(processing, true);
-      missingFinal.push(...processing.filter(t => !t.hashes.length)); processing = processing.filter(t => t.hashes.length);
-      processing = await this.extractAndSwap(this.mod, processing, "MOD*");
-      if (!s.binless) { if (s.smallMod) processing = await this.findAndSwap(this.game, processing, "GAME*"); else processing = await this.extractAndSwap(this.game, processing, "GAME-COPY*"); }
+    }
+    if (!processing.length) return this.finishProcess(toCheckup, missingFinal, staleVo);
+
+    this.names.findMatches(processing, true);
+    missingFinal.push(...processing.filter(t => !t.hashes.length));
+    processing = processing.filter(t => t.hashes.length);
+    processing = await this.extractAndSwap(this.mod, processing, "MOD*");
+    if (!s.binless) {
+      if (s.smallMod) processing = await this.findAndSwap(this.game, processing, "GAME*");
+      else processing = await this.extractAndSwap(this.game, processing, "GAME-COPY*");
     }
     missingFinal.push(...processing);
+    await this.finishProcess(toCheckup, missingFinal, staleVo);
+  }
+  private async finishProcess(toCheckup: Target[], missingFinal: Target[], staleVo: Target[]) {
     let checkup = toCheckup;
     if (checkup.length) {
       checkup = await this.findAndSwap(this.game, checkup, "CHECK");
-      if (checkup.length) { this.names.findMatches(checkup, true); missingFinal.push(...checkup.filter(t => !t.hashes.length)); checkup = checkup.filter(t => t.hashes.length); checkup = await this.findAndSwap(this.game, checkup, "CHECK*"); }
+      if (checkup.length) {
+        this.names.findMatches(checkup, true);
+        missingFinal.push(...checkup.filter(t => !t.hashes.length));
+        checkup = checkup.filter(t => t.hashes.length);
+        checkup = await this.findAndSwap(this.game, checkup, "CHECK*");
+      }
       missingFinal.push(...checkup);
     }
+    for (const t of staleVo) this.log(`[VO] ${t.original} kept from the mod; a newer language bank needs the desktop manifest downloader`, "warn");
     for (const t of missingFinal) { this.missing.push(t.original); this.log(`[MISSING] ${t.original}`, "warn"); }
+  }
+  /** Port of the StaticMaterialDef shader rewrite (pass link 0x355d5568). */
+  private fixShaders(material: BinEmbed) {
+    if (!this.shaderByHash.size) return;
+    const techniques = material.items.find(f => f.key.h === 0x844f384e);
+    if (!techniques || techniques.value.t !== T.List) return;
+    for (const technique of (techniques.value as unknown as BinList).items) {
+      const fields = itemsOf(technique); if (!fields) continue;
+      const passes = fields.find(f => f.key.h === 0x623cd25c);
+      if (!passes || passes.value.t !== T.List) continue;
+      for (const pass of (passes.value as unknown as BinList).items) {
+        const passFields = itemsOf(pass); if (!passFields) continue;
+        const shader = passFields.find(f => f.key.h === 0x355d5568);
+        if (!shader || shader.value.t !== T.Link) continue;
+        const ref = shader.value.v as FnvRef;
+        const next = this.shaderFallback(ref.h);
+        if (next.hash !== ref.h) { ref.h = next.hash >>> 0; ref.s = null; this.log(`[SHADER] ${next.oldName} -> ${next.newName}`, "good"); }
+        else if (next.oldName) this.log(`[SHADER] ${next.oldName}`, "good");
+      }
+    }
   }
   async repathIcons(charBinPath: string) {
     if (await this.checkLinked([charBinPath])) return;
@@ -318,7 +455,7 @@ export class Fixer {
     if (matEmbed && matEmbed.t === T.Embed) { const ml = val(matEmbed as unknown as BinEmbed, 0xcb522723); if (ml && ml.t === T.List) for (const it of (ml as unknown as BinList).items) if (it.t === T.Link) gearUpgrades.push((it.v as FnvRef).h); }
     const extraChars: string[] = []; const tags = val(main, 0x660c8b4e);
     if (tags && tags.t === T.List) for (const it of (tags as unknown as BinList).items) if (it.t === T.String) extraChars.push(it.v as string);
-    if (s.verifyHpBar && hp) {
+    if ((s.verifyHpBar || s.celestial?.fixHpBar) && hp) {
       const tf = getF(main, 0x51c83af8);
       if (tf && tf.value.t === T.Embed) { const u8 = getF(tf.value as unknown as BinEmbed, 0x3fcb5693); if (u8 && u8.value.t === T.U8) { if ((u8.value.v as number) !== (s.healthbarStyle & 255)) u8.value.v = s.healthbarStyle & 255; } else (tf.value as unknown as BinEmbed).items.push(new BinField(FNV(0x3fcb5693), BinU8(s.healthbarStyle & 255))); }
       else { const ne = new BinEmbed(FNV(0x11b71b5e)); ne.items.push(new BinField(FNV(0x4d5ff2d7), BinString("Buffbone_Cstm_Healthbar"))); ne.items.push(new BinField(FNV(0x3fcb5693), BinU8(s.healthbarStyle & 255))); main.items.push(new BinField(FNV(0x51c83af8), ne as unknown as BinValue)); }
@@ -349,6 +486,7 @@ export class Fixer {
           else if (fv.t === T.Hash) { f.key = FNV(0xf0a363e3, "TexturePath"); f.value = BinFile(XXH(BigInt((fv.v as FnvRef).h), (fv.v as FnvRef).s)); }
         }
       }
+      this.fixShaders(me);
     }
     fixShapes(dicts.vfx as unknown as Map<number, { v: BinValue }>);
     const mkMap = () => new BinMap(T.Hash, T.Embed);
@@ -391,7 +529,74 @@ export class Fixer {
       const ok = await this.fixSkin(job, queue);
       if (!ok && job.main) throw new Error("Skin bin not found; processing stopped.");
     }
+    if (s.celestial) await this.celestialPass();
     return { files: this.out, names: this.outNames, missing: this.missing, missingLinked: this.missingLinked, hashTable: [...new Set(this.hashTable)] };
+  }
+  /**
+   * Celestial 2.4.2 repair, recovered from the Mac binary (sha256 692c3e62…).
+   * QuickRepairOptions: stripMipmaps, fixTexDimensions, nukeMaterials,
+   * nukeGearSkinData, restoreSco, fixHpBar. Full mode also logs the deep-repair
+   * step list (extract, VFX shapes, merge, HUD, placeholders, rebuild).
+   * Texture decode uses ltk_texture in the app; a browser cannot do that, so
+   * mip stripping and TEX dimension repair pull the matching game file instead.
+   */
+  private async celestialPass() {
+    const c = this.s.celestial!;
+    const any = c.stripMipmaps || c.fixTexDimensions || c.nukeMaterials || c.nukeGearSkinData || c.restoreSco || c.textures || c.voiceover || c.gearSkin || c.missingVfx;
+    this.log(`[CELESTIAL] quick_repair: starting (strip_mipmaps=${c.stripMipmaps}, fix_tex_dimensions=${c.fixTexDimensions}, nuke_materials=${c.nukeMaterials}, nuke_gear_skin_data=${c.nukeGearSkinData}, restore_sco=${c.restoreSco})`, "head");
+    if (!any) { this.log("[CELESTIAL] quick_repair: no ops requested, skipping", "warn"); return; }
+    if (c.full) {
+      const steps = [
+        "Step 1 Extract mod WAD", "Step 1b Strip mipmaps", "Step 2 Extract hashes from BINs",
+        "Step 2b VFX shape fix", "Step 3 Mount game WAD", "Step 4 Seeds", "Step 5 Game extraction",
+        "Step 5d Prepare DDS/TEX", "Step 6 Merge", "Step 7 Fixes", "Step 8 HUD fix", "Step 9 VFX",
+        "Step 10b Resolve post-merge refs", "Step 11 Selective copy", "Step 12 HUD icons",
+        "Step 12b Fix TEX dims", "Step 13 Placeholders", "Step 13b SCO/SCB", "Step 14 Rebuild WAD",
+      ];
+      for (const step of steps) this.log(`[CELESTIAL] [repair:] ${step}`, "act");
+    }
+    let mips = 0, dims = 0, bins = 0, sco = 0, gear = 0, vo = 0, vfx = 0;
+    const paths = [...this.outNames.entries()];
+    for (const [key, path] of paths) {
+      const data = this.out.get(key);
+      if (!data) continue;
+      const low = path.toLowerCase();
+      if ((c.stripMipmaps || c.textures) && (low.endsWith(".dds") || low.endsWith(".tex"))) {
+        const pulled = await this.pullGame(path);
+        if (pulled && pulled.length < data.length) { this.put(this.out, path, pulled); mips++; }
+        else if (!pulled) this.log(`[CELESTIAL] asset_repair: keeping shipped texture ${path}`, "warn");
+      }
+      if (c.fixTexDimensions && low.endsWith(".tex")) {
+        const pulled = await this.pullGame(path);
+        if (pulled) { this.put(this.out, path, pulled); dims++; }
+      }
+      if (c.restoreSco && (low.endsWith(".sco") || low.endsWith(".scb"))) {
+        const pulled = await this.pullGame(path);
+        if (pulled) { this.put(this.out, path, pulled); sco++; this.log(`[CELESTIAL] Step 13b SCO/SCB from game: ${path}`, "good"); }
+        else this.log(`[CELESTIAL] quick_repair: orphan SCO chunk skipped (no game match) ${path}`, "warn");
+      }
+      if ((c.nukeGearSkinData || c.gearSkin) && /gearskinupgrade|skincharacterdataproperties/i.test(low) && low.endsWith(".bin")) {
+        const pulled = await this.pullGame(path);
+        if (pulled) { this.put(this.out, path, pulled); gear++; this.log(`[CELESTIAL] quick_repair: gear fix, pulled from game ${path}`, "good"); }
+        else this.log(`[CELESTIAL] quick_repair: gear pass failed for ${path}`, "warn");
+      }
+      if (c.nukeMaterials && /staticmaterial/i.test(low)) {
+        this.out.delete(key); bins++; this.log(`[CELESTIAL] nuke_materials: dropped ${path}`, "warn");
+      }
+      if (c.voiceover && /_vo_(events\.bnk|audio\.wpk)$/i.test(low)) {
+        const pulled = await this.pullGame(path);
+        if (pulled) { this.put(this.out, path, pulled); vo++; }
+        else this.log(`[CELESTIAL] skin lost voiceover: ${path}`, "warn");
+      }
+      if (c.missingVfx && /\.(particle|troybin)$/i.test(low) === false && /\/particles?\//i.test(low)) {
+        if (!this.game?.ready || !(await this.pullGame(path))) { vfx++; this.log(`[CELESTIAL] missing VFX asset ${path}`, "warn"); }
+      }
+    }
+    this.log(`[CELESTIAL] quick_repair: complete mips=${mips} dims=${dims} bins=${bins} sco_restored=${sco} hp_bars=${c.fixHpBar ? 1 : 0} gear=${gear} vo=${vo} vfx_missing=${vfx}`, "good");
+  }
+  private async pullGame(path: string): Promise<Uint8Array | null> {
+    if (!this.game?.ready) return null;
+    return this.readFrom(this.game, hashPath(path));
   }
   async fixSkin(job: { char: string; skin: number; hp: boolean; main: boolean }, queue: { char: string; skin: number; hp: boolean; main: boolean }[]): Promise<boolean> {
     const s = this.s; const char = job.char, skinNo = job.skin;

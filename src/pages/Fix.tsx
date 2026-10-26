@@ -12,9 +12,10 @@ import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle";
 import { Button } from "@/components/ui/button";
 import { SpotlightPanel } from "@/components/ui/spotlight";
 import TopoField from "@/components/ui/topo-field";
-import { fixSkin, inspectSkin, isNamesCached, loadGameDir, loadGameFileList, loadHashNames } from "@/lib/fixer/pipeline";
-import type { FixerOptions, FixReport, GameIndexState, ImportReport, LogLine } from "@/lib/fixer/types";
-import { DEFAULT_OPTIONS } from "@/lib/fixer/types";
+import { fixSkin, inspectSkin, isNamesCached, loadGameDir, loadGameFileList, loadHashNames, loadManifests } from "@/lib/fixer/pipeline";
+import type { FixerOptions, FixReport, GameIndexState, ImportReport, LogLine, ManifestChoice } from "@/lib/fixer/types";
+import { DEFAULT_OPTIONS, DEFAULT_CELESTIAL } from "@/lib/fixer/types";
+import type { CelestialOptions } from "@/lib/fixer/types";
 import { getSetting, useSettings } from "@/lib/settings";
 import { saveGameDirHandle, loadGameDirHandle } from "@/lib/game-dir-store";
 
@@ -31,7 +32,6 @@ import { cn } from "@/lib/utils";
 const EASE = [0.22, 1, 0.36, 1] as [number, number, number, number];
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.04 } } };
 const staggerItem = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: EASE } } };
-const staggerItemFast = { hidden: { opacity: 0, y: 6 }, visible: { opacity: 1, y: 0, transition: { duration: 0.18, ease: EASE } } };
 
 const TONES: Record<string, string> = {
   act: "text-sky-500", warn: "text-amber-500", good: "text-emerald-500",
@@ -68,6 +68,9 @@ export function Fix() {
   const [gameState, setGameState] = useState<GameIndexState>({ status: "idle", wadCount: 0, fileCount: 0, message: "" });
     const [namesStatus, setNamesStatus] = useState("");
     const [namesLoading, setNamesLoading] = useState(false);
+  const [manifests, setManifests] = useState<ManifestChoice[]>([]);
+  const [advanced, setAdvanced] = useState(false);
+  const [backup, setBackup] = useState<File | null>(null);
     const { settings, setSetting } = useSettings();
     const rememberFolder = settings.rememberGameFolder;
 
@@ -107,15 +110,21 @@ export function Fix() {
   }
 
   async function onFile(next: File | null) {
-    setResult(null); setBlob(null); setLogs([]); setError(""); setFile(next);
+    setResult(null); setBlob(null); setLogs([]); setError(""); setFile(next); if (next && !next.name.endsWith(".backup.fantome")) setBackup(next);
     if (!next) return setReport(null);
     try {
       const inspected = await inspectSkin(next);
       setReport(inspected);
       setOptions(cur => ({
         ...cur,
+        character: inspected.character ?? cur.character,
         skinNo: inspected.skinNumbers[0] ?? 0,
+        affix: cur.affix || (inspected.character ? `@${inspected.character.slice(0, 4)}${inspected.skinNumbers[0] ?? 0}` : ""),
       }));
+    loadManifests().then(list => {
+      setManifests(list);
+      setOptions(cur => ({ ...cur, manifestVersion: cur.manifestVersion || list[0]?.version || "" }));
+    }).catch(() => {});
     } catch {
       setReport(null); setError(t.badFile);
     }
@@ -372,42 +381,93 @@ export function Fix() {
           <SpotlightPanel dark={dark} className="p-5">
             <div className="flex items-center justify-between">
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.pass}</p>
-              <button type="button" onClick={() => setOptions({ ...DEFAULT_OPTIONS, skinNo: report?.skinNumbers[0] ?? 0 })} className="text-xs text-neutral-500 hover:text-current">
+              <button type="button" onClick={() => setOptions({ ...DEFAULT_OPTIONS, skinNo: report?.skinNumbers[0] ?? 0, character: report?.character ?? "" })} className="text-xs text-neutral-500 hover:text-current">
                 {t.reset}
               </button>
             </div>
-            <label className="mt-4 block text-sm">
-              <span className="text-neutral-500">{t.skinNo}</span>
-              <input className={cn(field, "mt-1.5")} type="number" min={0} value={options.skinNo} onChange={e => setOptions({ ...options, skinNo: Number(e.target.value) })} />
+            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.engine}</p>
+            <div className="mt-2">
+              <Segmented
+                label={t.engineHint}
+                value={options.engine}
+                options={[{ value: "cslol", label: t.engineCslol }, { value: "celestial", label: t.engineCelestial }]}
+                onChange={engine => setOptions({ ...options, engine })}
+              />
+            </div>
+            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.championSkin}</p>
+            <label className="mt-3 block text-sm">
+              <span className="text-neutral-500">{t.character}</span>
+              <input className={cn(field, "mt-1.5")} value={options.character} placeholder={report?.character ?? ""} onChange={e => setOptions({ ...options, character: e.target.value.toLowerCase() })} />
             </label>
             <label className="mt-3 block text-sm">
-              <span className="text-neutral-500">{t.affix}</span>
-              <input className={cn(field, "mt-1.5")} value={options.affix} placeholder={t.affixHint} onChange={e => setOptions({ ...options, affix: e.target.value })} />
+              <span className="text-neutral-500">{t.skinNo}</span>
+              <input className={cn(field, "mt-1.5")} type="number" min={0} disabled={options.allAvailable} value={options.allAvailable ? "" : options.skinNo} placeholder={options.allAvailable ? "—" : ""} onChange={e => setOptions({ ...options, skinNo: Number(e.target.value) })} />
             </label>
-            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsContent}</p>
-            <motion.div initial="hidden" animate="visible" variants={reduced ? {} : { ...staggerContainer, visible: { transition: { staggerChildren: 0.03 } } }} className={cn("mt-2 divide-y", dark ? "divide-white/10" : "divide-black/8")}>
+            {options.engine === "celestial" ? (
+              <CelestialPanel
+                options={options.celestial}
+                dark={dark}
+                labels={{
+                  mode: t.celestialMode, quick: t.quickFix, full: t.fullRepair, on: t.on, off: t.off, note: t.celestialNote,
+                  stripMipmaps: t.stripMipmaps, fixTex: t.fixTex, nukeMaterials: t.nukeMaterials, nukeGear: t.nukeGear,
+                  restoreSco: t.restoreSco, fixHpBar: t.fixHpBar, textures: t.textures, voiceover: t.voiceover,
+                  gearSkin: t.gearSkin, missingVfx: t.missingVfx,
+                }}
+                onChange={celestial => setOptions({ ...options, celestial })}
+              />
+            ) : (
+            <div className={cn("mt-2 divide-y", dark ? "divide-white/10" : "divide-black/8")}>
               {([
                 ["allAvailable", t.allAvailable],
                 ["binless", t.binless],
-                ["noSkin", t.noSkin],
-                ["keepIcons", t.keepIcons],
-                ["keepSfx", t.keepSfx],
-                ["killStatic", t.killStatic],
-                ["keepUi", t.keepUi],
                 ["smallMod", t.smallMod],
-                ["repathInFile", t.repathInFile],
-                ["apply1617", t.apply1617],
-                                ["convertBeforeCollect", t.convertBeforeCollect],
+                ["noSkin", t.noSkin],
               ] as const).map(([key, label]) => (
-                <motion.div key={key} variants={reduced ? {} : staggerItemFast}>
-                  <OptionRow label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={checked => setOptions({ ...options, [key]: checked })} />
-                </motion.div>
+                <OptionRow key={key} label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={checked => setOptions({ ...options, [key]: checked })} />
               ))}
-            </motion.div>
-            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.optionsAudio}</p>
+            </div>
+            )}
+            {options.engine === "cslol" && <button type="button" onClick={() => setAdvanced(v => !v)} className="mt-4 flex w-full items-center justify-between text-left text-sm">
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.advanced}</span>
+              <span className="text-xs text-neutral-500">{advanced ? t.hide : t.show}</span>
+            </button>}
+            {options.engine === "cslol" && advanced && (
+              <div className="mt-2">
+                <Segmented label={t.sound} value={options.sound} options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]} onChange={sound => setOptions({ ...options, sound })} />
+                <Segmented label={t.animation} value={options.animation} options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]} onChange={animation => setOptions({ ...options, animation })} />
+                <div className={cn("divide-y", dark ? "divide-white/10" : "divide-black/8")}>
+                  {([
+                    ["repathInFile", t.repathInFile],
+                    ["keepSfx", t.keepSfx],
+                    ["keepIcons", t.keepIcons],
+                    ["keepUi", t.keepUi],
+                    ["keepBonus", t.keepBonus],
+                    ["killStatic", t.killStatic],
+                  ] as const).map(([key, label]) => (
+                    <OptionRow key={key} label={label} checked={options[key]} onLabel={t.on} offLabel={t.off} onChange={checked => setOptions({ ...options, [key]: checked })} />
+                  ))}
+                </div>
+                <label className="mt-3 block text-sm">
+                  <span className="text-neutral-500">{t.affix}</span>
+                  <input className={cn(field, "mt-1.5")} maxLength={255} value={options.affix} placeholder={t.affixHint} onChange={e => setOptions({ ...options, affix: e.target.value })} />
+                </label>
+              </div>
+            )}
+            {options.engine === "cslol" && <><p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.manifest}</p>
             <div className="mt-2">
-              <Segmented label={t.sound} value={options.sound} options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]} onChange={sound => setOptions({ ...options, sound })} />
-              <Segmented label={t.animation} value={options.animation} options={[{ value: "auto", label: t.auto }, { value: "include", label: t.include }, { value: "exclude", label: t.exclude }]} onChange={animation => setOptions({ ...options, animation })} />
+              <OptionRow label={t.manifestEnable} checked={options.manifest} onLabel={t.on} offLabel={t.off} onChange={manifest => setOptions({ ...options, manifest })} />
+              <select className={cn(field, "mt-2")} disabled={!options.manifest} value={options.manifestVersion} onChange={e => setOptions({ ...options, manifestVersion: e.target.value })}>
+                {manifests.map(m => <option key={m.version} value={m.version}>{m.version}</option>)}
+              </select>
+              <p className="mt-2 text-xs text-neutral-500">{t.manifestHint}</p>
+            </div></>}
+            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-500">{t.backup}</p>
+            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+              <span className="truncate text-neutral-500">{backup ? backup.name : t.noBackup}</span>
+              <span className="flex shrink-0 gap-2">
+                <button type="button" className="text-xs text-neutral-500 hover:text-current" onClick={() => blob && saveBackup(blob, file?.name ?? "mod")}>{t.createBackup}</button>
+                <button type="button" className="text-xs text-neutral-500 hover:text-current disabled:opacity-40" disabled={!backup} onClick={() => backup && void onFile(backup)}>{t.restoreBackup}</button>
+              </span>
             </div>
           </SpotlightPanel>
           </aside>
@@ -430,6 +490,60 @@ export function Fix() {
       </AnimatePresence>
     </div>
   );
+}
+
+void DEFAULT_CELESTIAL;
+
+function CelestialPanel({
+  options, dark, labels, onChange,
+}: {
+  options: CelestialOptions;
+  dark: boolean;
+  labels: {
+    mode: string; quick: string; full: string; on: string; off: string; note: string;
+    stripMipmaps: string; fixTex: string; nukeMaterials: string; nukeGear: string;
+    restoreSco: string; fixHpBar: string; textures: string; voiceover: string;
+    gearSkin: string; missingVfx: string;
+  };
+  onChange: (next: CelestialOptions) => void;
+}) {
+  const rows = [
+    ["stripMipmaps", labels.stripMipmaps],
+    ["fixTexDimensions", labels.fixTex],
+    ["nukeMaterials", labels.nukeMaterials],
+    ["nukeGearSkinData", labels.nukeGear],
+    ["restoreSco", labels.restoreSco],
+    ["fixHpBar", labels.fixHpBar],
+    ["textures", labels.textures],
+    ["voiceover", labels.voiceover],
+    ["gearSkin", labels.gearSkin],
+    ["missingVfx", labels.missingVfx],
+  ] as const;
+  return (
+    <div className="mt-2">
+      <Segmented
+        label={labels.mode}
+        value={options.mode}
+        options={[{ value: "quick", label: labels.quick }, { value: "full", label: labels.full }]}
+        onChange={mode => onChange({ ...options, mode })}
+      />
+      <div className={cn("divide-y", dark ? "divide-white/10" : "divide-black/8")}>
+        {rows.map(([key, label]) => (
+          <OptionRow key={key} label={label} checked={options[key]} onLabel={labels.on} offLabel={labels.off} onChange={checked => onChange({ ...options, [key]: checked })} />
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-neutral-500">{labels.note}</p>
+    </div>
+  );
+}
+
+function saveBackup(data: Blob, name: string) {
+  const url = URL.createObjectURL(data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name.replace(/\.(fantome|zip|modpkg)$/i, "") + ".backup.fantome";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function chime() {
